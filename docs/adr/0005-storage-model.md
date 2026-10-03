@@ -109,8 +109,8 @@ Event wire 语义下比较，而不是引入第二套协议格式。
 
 - core：390,328 B / 381.2 KiB；
 - append-file + Space index：420,880 B / 411.0 KiB，较 core +30,552 B / 29.8 KiB；
-- SQLite system-linked：430,656 B / 420.6 KiB，较 core +40,328 B / 39.4 KiB；
-- SQLite bundled：1,488,048 B / 1,453.2 KiB，较 core +1,097,720 B / 1,072.0 KiB。
+- SQLite system-linked：430,688 B / 420.6 KiB，较 core +40,360 B / 39.4 KiB；
+- SQLite bundled：1,488,112 B / 1,453.2 KiB，较 core +1,097,784 B / 1,072.1 KiB。
 
 因此 bundled SQLite 不适合作为 Seed 极小默认 Core 的基线；system-linked SQLite
 仍然是有竞争力的可选 backend，需要继续用 scale/query/crash/platform 数据比较。
@@ -203,13 +203,15 @@ append-file 候选已经覆盖/正在覆盖：
 - corrupted checksum rejection；
 - truncated tail strict rejection；
 - explicit final-tail recovery；
+- completed durable appends survive forced process kill while the store is still open，append-file 与 SQLite WAL 均已通过集成测试；
 - release binary size delta：`seed-core-smoke` 390,328 B / 381.2 KiB，
   `seed-storage-smoke` 420,880 B / 411.0 KiB，delta 30,552 B / 29.8 KiB；
 - CI full gate（fmt/check/clippy/tests/protocol smoke/storage smoke/size）通过。
 
 仍需：
 
-- process kill / power-loss style recovery；
+- forced process kill after completed durable appends — **DONE (append-file + SQLite)**；
+- mid-write / torn-write / real power-loss style recovery 仍待独立 fault-injection；
 - invalid event 不进入 accepted history/materialized state 的完整 acceptance pipeline；
 - rebuild 与在线 materialization 结果一致；
 - 10k / 100k event rebuild；
@@ -217,7 +219,8 @@ append-file 候选已经覆盖/正在覆盖：
 - recent-history query；
 - file size；
 - SQLite 初始 adapter / reopen / duplicate / indexed recent-history / size 对照 — **DONE**；
-- append-file 与 SQLite 的 10k / 100k scale、query、crash/power-loss 同条件对照；
+- append-file 与 SQLite 的 10k / 100k scale、query 同条件对照；
+- mid-write / torn-write / power-loss fault-injection 同条件对照；
 - desktop / Tree Host platform checks。
 
 ## Revisit conditions
