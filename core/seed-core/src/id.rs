@@ -40,4 +40,6 @@ typed_id!(IdentityId);
 typed_id!(DeviceId);
 typed_id!(SpaceId);
 typed_id!(EventId);
+typed_id!(GenesisId);
 typed_id!(PluginId);
+typed_id!(PluginDigest);
