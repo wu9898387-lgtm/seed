@@ -10,7 +10,7 @@ impl CapabilityId {
         Self(name)
     }
 
-    pub const fn as_str(self) -> &'static str {
+    pub const fn as_str(&self) -> &'static str {
         self.0
     }
 }
