@@ -213,4 +213,4 @@ Seed 希望保持一个非常小的基础核心。
 
 SQLite 对照 adapter 也已完成第一轮 CI：system-linked smoke 为 **430,656 B / 420.6 KiB**（较 core +39.4 KiB），bundled smoke 为 **1,488,048 B / 1,453.2 KiB**（较 core +约 1.05 MiB）。因此 SQLite 不进入默认 Core；system-linked SQLite 保留为可选 backend，对照 append-file 的 scale/query/crash/platform 数据后再决定 ADR-0005。
 
-协议仍未冻结。下一优先级是完成 10k/100k storage 对照，同时把 Transport abstraction + Loopback 合入主线，再进入 TCP Direct / Relay 与插件沙箱。
+协议仍未冻结。Transport abstraction + Loopback 已合入主线；下一优先级是完成 10k/100k storage 对照，并进入 TCP Direct / Relay 与插件沙箱。
