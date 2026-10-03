@@ -26,5 +26,7 @@ jobs:
         run: cargo test --workspace
       - name: Protocol vector smoke
         run: cargo run --quiet --bin seed-vector
+      - name: Persistent storage smoke
+        run: cargo run --quiet --bin seed-storage-smoke
       - name: Release size
         run: sh tools/size-report.sh
