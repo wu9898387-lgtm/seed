@@ -1,6 +1,6 @@
 # ADR-0005: Validated Event Log 为权威历史，Materialized View 为可重建状态
 
-- Status: Proposed
+- Status: Provisional
 - Date: 2026-10-03
 - Decision scope: Storage / Sync / Tree Host
 
@@ -16,7 +16,7 @@ Seed 需要同时支持：
 - Tree Host 持久化；
 - 插件状态。
 
-当前 `main` 有 append-only in-memory Event Store；`storage-spike` 进一步加入了 append-only file baseline 与 partial-tail recovery。
+当前 `main` 已包含 append-only in-memory Event Store，以及 PR #3 合并的 std-only append-only file baseline、partial-tail recovery 与 partial-header repair。
 
 如果只同步“当前数据库表”，很难证明状态变化过程，也难以正确验证治理历史。
 
@@ -52,7 +52,7 @@ checkpoint()
 
 ## MVP backend
 
-持久化 backend 尚未 Accepted，但 append-only file baseline 已完成第一轮 Spike。
+持久化 backend 尚未 Accepted，但 append-only file baseline 已完成第一轮 Spike，并已合并到 `main`。
 
 ### Append-only file baseline
 
