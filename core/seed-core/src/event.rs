@@ -39,6 +39,7 @@ pub struct Event {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EncodeError {
     FieldTooLarge,
+    UnsupportedProtocolVersion,
     SchemaTooLarge,
     PayloadTooLarge,
     BodyTooLarge,
@@ -215,7 +216,7 @@ impl Event {
 
 fn canonical_unsigned_bytes(header: &EventHeader, payload: &[u8]) -> Result<Vec<u8>, EncodeError> {
     if header.protocol_version != PROTOCOL_VERSION {
-        return Err(EncodeError::FieldTooLarge);
+        return Err(EncodeError::UnsupportedProtocolVersion);
     }
     if header.schema.len() > MAX_EVENT_SCHEMA_BYTES {
         return Err(EncodeError::SchemaTooLarge);
