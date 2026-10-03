@@ -15,6 +15,8 @@ pub mod genesis;
 pub mod id;
 pub mod identity;
 pub mod plugin;
+#[cfg(feature = "plugin-wasmi")]
+pub mod wasm_runtime;
 pub mod space;
 #[cfg(feature = "sqlite-storage")]
 pub mod sqlite_storage;
