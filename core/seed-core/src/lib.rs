@@ -3,12 +3,15 @@
 //! Seed core protocol primitives.
 //!
 //! This crate intentionally contains no social roles such as owner/admin/moderator.
-//! It defines low-level identity, device authorization, spaces, signed events,
-//! capabilities, plugin manifests, crypto boundaries, and event storage primitives.
+//! It defines low-level identity, device authorization, canonical Genesis records,
+//! spaces, signed events, capabilities, plugin manifests, crypto boundaries, and
+//! event storage primitives.
 
 pub mod capability;
+mod codec;
 pub mod crypto;
 pub mod event;
+pub mod genesis;
 pub mod id;
 pub mod identity;
 pub mod plugin;
