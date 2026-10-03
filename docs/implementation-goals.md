@@ -172,9 +172,16 @@ Phase 0 完成必须有：
 
 #### Storage
 
-- append event；
+- append accepted event；
 - query by space；
+- content-derived deduplication；
+- canonical Event wire record；
+- persistent append-file candidate；
+- restart index rebuild；
+- explicit incomplete-tail recovery；
 - materialized state 基础。
+
+append-file 只是 Phase 0 候选；最终 backend 仍需与 SQLite 做同条件比较。
 
 ### Demo
 
@@ -650,7 +657,7 @@ target                         <= 2 MB
 - protocol vectors；
 - multi-node smoke test；
 - dependency audit；
-- release size report。
+- release size report（core baseline + storage candidate delta）。
 
 后续增加：
 
@@ -745,7 +752,8 @@ MVP 发布候选必须满足：
 
 - Rust baseline 已完成；
 - Identity / DeviceAuthorization 已完成第一版；
-- signed Event 与 deterministic IDs 已完成；
+- signed Event、deterministic IDs 与 canonical Event wire decode/re-encode 已完成；
+- append-only persistent Event Store candidate 已实现（restart rebuild / checksum / explicit tail recovery）；
 - Genesis canonical state machine 已完成；
 - plugin package digest pinning 已完成；
 - Capability DefaultDeny 已存在；
@@ -756,7 +764,7 @@ MVP 发布候选必须满足：
 
 下一批优先实现：
 
-1. persistent Event Store（SQLite vs append-file）；
+1. 完成 persistent storage 对照（append-file measurements + SQLite adapter）；
 2. Transport abstraction + Loopback；
 3. TCP Direct + Relay fallback；
 4. Plugin Runtime / Wasm engine size + sandbox comparison；
