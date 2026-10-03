@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fs, net::TcpListener};
 
 use seed_core::{
     event::{Event, EventHeader},
@@ -8,6 +8,7 @@ use seed_core::{
     plugin::PluginVersion,
     space::SpaceKind,
     storage::{AppendOutcome, FileEventStore},
+    transport::{FrameTransport, TcpFrameTransport},
     PROTOCOL_VERSION,
 };
 
@@ -68,13 +69,31 @@ fn main() {
         .verify(root.document(), &authorization)
         .expect("verified event");
 
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback");
+    let address = listener.local_addr().expect("loopback address");
+    let mut client = TcpFrameTransport::connect(address).expect("connect loopback");
+    let (server_stream, _) = listener.accept().expect("accept loopback");
+    let mut server = TcpFrameTransport::from_stream(server_stream);
+
+    client
+        .send_frame(&encoded_event)
+        .expect("send canonical event");
+    let transported_bytes = server.recv_frame().expect("receive canonical event");
+    let transported_event =
+        Event::from_canonical_bytes(&transported_bytes).expect("decode transported event");
+    transported_event
+        .verify(root.document(), &authorization)
+        .expect("verify transported event");
+
     let log_path = std::env::temp_dir().join(format!("seed-core-smoke-{}.log", std::process::id()));
     let _ = fs::remove_file(&log_path);
 
     {
         let mut store = FileEventStore::open(&log_path).expect("open event log");
         assert_eq!(
-            store.append(decoded_event.clone()).expect("append event"),
+            store
+                .append(transported_event.clone())
+                .expect("append event"),
             AppendOutcome::Inserted
         );
     }
@@ -88,7 +107,7 @@ fn main() {
     let _ = fs::remove_file(&log_path);
 
     println!(
-        "seed-core protocol={} identity={} genesis={} space={} event={} stored={}",
+        "seed-core protocol={} identity={} genesis={} space={} event={} stored={} transport=loopback-tcp",
         PROTOCOL_VERSION,
         root.document().id(),
         genesis.id(),
