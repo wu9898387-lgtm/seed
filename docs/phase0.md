@@ -63,6 +63,11 @@ The canonical Event signing-preimage spike then measured **355,624 bytes
 Core tests plus format and clippy, including an exact Ed25519 signature over
 the complete 119-byte deterministic Event vector.
 
+The first integrated WASM plugin-runtime spike measured **1,274,376 bytes
+(1,245 KiB)** with validation and fuel metering enabled and WAT/WASI excluded.
+That is **918,752 bytes** above the Event+crypto binary and about **60.8%** of
+the 2 MiB reference target.
+
 ## What this spike does not decide
 
 It intentionally does not freeze:
