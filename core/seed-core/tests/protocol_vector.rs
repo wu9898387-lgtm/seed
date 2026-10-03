@@ -18,7 +18,7 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 #[test]
-fn identity_genesis_event_vector_v2() {
+fn identity_genesis_event_vector_v3() {
     let root = RootIdentity::from_secret_bytes([1u8; 32]);
     let device = DeviceIdentity::from_secret_bytes([2u8; 32]);
     let authorization = root.authorize_device(&device, 1, 1_700_000_000_000);
@@ -109,11 +109,15 @@ fn identity_genesis_event_vector_v2() {
     );
     assert_eq!(
         event.id().to_string(),
-        "5670cf7b9d76f1814d0ae6bf6b75e5c715c289e50e10754e77eecfbbda656af8"
+        "ac49cbc52f6f607541700c83829c73c9e79e09630cc209c3c7670f2e095fb1bb"
     );
     assert_eq!(
         hex(event.signature().as_bytes()),
-        "ffe70b44a079531fa750e4c94004cab15ce4385cf01c5641b5d4eabeb75620ac15e2f9c98bccd5c4d149a9909156436e2730a9b2dd40cb4245d8fd70ff13df0d"
+        "8f28b869791f71b43480e1ce041b4bcf96300f947e7815a3042028e60361fb6d472f86644c73e61bc579f42a09d3b80d663d8546d2274e390c9400c7d61eb000"
+    );
+    assert_eq!(
+        hex(&event.canonical_bytes().unwrap()),
+        "5345565400010000009500010001ccebbe4515777718143f6fc51b37c4412366b08c4c73757a92668fb276b8680600524173a9a0f74fe50a3ffde32c2c8cf013c734a39ae7847fb56fd98ddefdb973c192ef5ee4e3f2e1815f48f09cf8f3d8d958d6e347aa07b456389e03554c4a00000000000000070000018bcfe5687b00000014736565642e6d6573736167652e746578742f76310000000568656c6c6f8f28b869791f71b43480e1ce041b4bcf96300f947e7815a3042028e60361fb6d472f86644c73e61bc579f42a09d3b80d663d8546d2274e390c9400c7d61eb000"
     );
 
     decoded_genesis
