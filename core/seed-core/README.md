@@ -44,7 +44,8 @@ Not implemented yet:
 
 - persistent/OS-backed key storage;
 - device revocation and key rotation;
-- persistent event storage;
+- materialized views, checkpoints, and large-history storage indexing;
+- SQLite backend comparison;
 - networking and secure sessions;
 - plugin sandbox/runtime;
 - governance execution;
