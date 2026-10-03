@@ -41,12 +41,16 @@ Linux x86_64 release / stripped：
 | identity + signing/event | 376,320 B / 367.5 KiB |
 | + Genesis canonical state machine | 389,816 B / 380.7 KiB |
 | + explicit 128-bit creation nonce | 389,992 B / 380.9 KiB |
+| current core smoke（含 Event wire） | 390,328 B / 381.2 KiB |
+| append-file storage smoke | 418,064 B / 408.3 KiB |
 
-这说明 Identity + signing + Event + Genesis 目前没有威胁 2 MiB 目标。
+同一 CI commit 下，`seed-storage-smoke` 相对 `seed-core-smoke` 的链接后增量为 **27,736 B / 27.1 KiB**。
+这不是最终数据库占用或历史数据文件大小，只是当前 persistent storage code path 的 release binary delta。
 
-真正的 size risk 仍然是：
+Identity + signing + Event + Genesis + 第一版 append-file storage 仍远低于 2 MiB。
+当前真正的 size risk 更集中在：
 
-- persistent storage；
+- SQLite 等替代 storage backend；
 - transport；
 - plugin runtime。
 
@@ -61,7 +65,8 @@ Linux x86_64 release / stripped：
 - Clippy with `-D warnings`；
 - tests；
 - protocol vector smoke；
-- release size。
+- persistent storage smoke；
+- release size（core + storage candidate delta）。
 
 最新检查已恢复为绿色。
 
@@ -116,7 +121,7 @@ append-only file + index 候选已经进入实现：
 
 仍需记录：
 
-- binary delta（CI 正在独立报告）；
+- binary delta — **DONE: +27,736 B / 27.1 KiB**（Linux x86_64 stripped release）；
 - append throughput；
 - process-kill / crash recovery；
 - file/db size；
