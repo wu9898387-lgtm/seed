@@ -35,6 +35,38 @@ Native in-process 插件如果与 Core 共享完整地址空间，会直接削�
 
 具体 Wasm engine **暂不冻结**。
 
+### Wasmi 2.0 Phase 0 candidate
+
+第一轮可执行候选使用 `wasmi = 2.0.0`，保持为 optional
+`plugin-wasmi` feature，不进入默认 Core。
+
+当前 Host ABI 只链接：
+
+```text
+seed.capability_allowed(i32) -> i32
+seed.state_put(i32, i32) -> i32
+seed.state_get(i32) -> i32
+```
+
+未链接 WASI，也没有 filesystem / network / clock / randomness /
+Root private-key host API。
+
+每个插件实例使用独立 Store。当前 reference limits：
+
+- fuel：50,000 / invocation；
+- Host ABI calls：1,024 / invocation；
+- linear memory：64 KiB；
+- instance：1；
+- memory：1；
+- table：1；
+- table elements：1,024；
+- scoped host-state entries：1,024；
+- memory/table growth failure -> trap；
+- guest trap -> 本次 scoped-state mutations rollback。
+
+同时在 load path 检查 Seed plugin manifest version 与 Plugin API version。
+这些参数只是 Phase 0 candidate，不是最终 ABI 或资源配额承诺。
+
 Phase 0 至少比较：
 
 - WAMR 或同类小 footprint runtime；
@@ -106,19 +138,56 @@ seed_ui_register(...)
 
 ## Validation
 
-Spike 必须记录：
+### Wasmi candidate 当前证据
+
+Linux x86_64 release / stripped，同一 Phase 0 构建口径：
+
+- default `seed-core-smoke`：**390,328 B / 381.2 KiB**；
+- `seed-plugin-wasmi-smoke`：**1,223,256 B / 1,194.6 KiB**；
+- runtime + Host ABI 相对 Core 增量：**832,928 B / 813.4 KiB**；
+- 2 MiB reference target 剩余：**873,896 B**。
+
+CI 已验证：
+
+- default `core-ci`、SQLite workflow、plugin-wasmi workflow 同时绿色；
+- plugin feature 下 **56 个 unit tests**；
+- manifest/API version mismatch 拒绝；
+- undeclared capability -> deny；
+- declared `EvaluateCapability(MemberRemove)` -> allow；
+- scoped storage 未声明 -> deny；
+- 每个 plugin Store 的 state namespace 独立；
+- scoped host-state entry count bounded；
+- non-terminating guest 被 fuel 中断；
+- 每次 invocation fuel budget 重置；
+- 128 KiB initial memory 被 64 KiB limit 拒绝；
+- runtime `memory.grow` 越界被拒绝；
+- Host ABI burst 超过 call quota 后 deny；
+- plugin 写 scoped state 后 trap -> 本次 state rollback；
+- Root private-key import 拒绝；
+- WASI/network-like import 拒绝；
+- malformed Wasm 在执行前拒绝；
+-真实 capability/state Host ABI smoke 通过。
+
+Wasmi 提供 fuel metering、Store resource limiter 与显式 Linker host functions，
+当前 spike 正是通过这些机制构造 deny-by-default sandbox。engine 仍保持可替换。 
+
+### 仍需比较/验证
+
+Spike 必须继续记录：
 
 - runtime 增加的 stripped binary size；
 - hello plugin 大小；
 - instantiate latency；
 - Host ABI 调用开销；
 - peak RSS；
-- memory limit；
-- infinite loop / trap；
-- OOM；
-- 未授权 filesystem/network access；
-- foreign plugin state access；
-- plugin crash isolation。
+- instantiate latency；
+- Host ABI 调用吞吐；
+- peak RSS；
+- dynamic OOM / allocator pressure；
+- event subscription/emit Host ABI；
+- durable scoped plugin storage；
+- plugin package/signing load path；
+- 至少一个第二 runtime 或 native out-of-process sandbox 对照。
 
 ## Acceptance gate
 

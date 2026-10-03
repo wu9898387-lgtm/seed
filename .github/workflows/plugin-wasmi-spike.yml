@@ -1,0 +1,38 @@
+name: plugin-wasmi-spike
+
+on:
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "core/seed-core/Cargo.toml"
+      - "core/seed-core/src/lib.rs"
+      - "core/seed-core/src/plugin.rs"
+      - "core/seed-core/src/wasm_runtime.rs"
+      - "core/seed-core/src/bin/seed-plugin-wasmi-smoke.rs"
+      - "tools/plugin-wasmi-size-report.sh"
+      - ".github/workflows/plugin-wasmi-spike.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wasmi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Check optional runtime
+        run: cargo check --workspace --features plugin-wasmi
+      - name: Clippy optional runtime
+        run: cargo clippy --workspace --all-targets --features plugin-wasmi -- -D warnings
+      - name: Test optional runtime
+        run: cargo test --workspace --features plugin-wasmi
+      - name: Plugin runtime smoke
+        run: cargo run --quiet --features plugin-wasmi --bin seed-plugin-wasmi-smoke
+      - name: Runtime size comparison
+        run: sh tools/plugin-wasmi-size-report.sh
