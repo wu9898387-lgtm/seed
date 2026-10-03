@@ -11,6 +11,7 @@ use crate::{
 
 pub const DEFAULT_PLUGIN_FUEL: u64 = 50_000;
 pub const DEFAULT_PLUGIN_MEMORY_BYTES: usize = 64 * 1024;
+pub const DEFAULT_PLUGIN_STATE_ENTRIES: usize = 1024;
 
 pub const HOST_DENY: i32 = 0;
 pub const HOST_ALLOW: i32 = 1;
@@ -50,6 +51,17 @@ impl PluginHostState {
             .permissions
             .iter()
             .any(|permission| matches!(permission, PluginPermission::ScopedStorage))
+    }
+
+    fn put_scoped_state(&mut self, key: i32, value: i32) -> bool {
+        if !self.scoped_storage_allowed() {
+            return false;
+        }
+        if !self.state.contains_key(&key) && self.state.len() >= DEFAULT_PLUGIN_STATE_ENTRIES {
+            return false;
+        }
+        self.state.insert(key, value);
+        true
     }
 
     fn capability_allowed(&self, code: i32) -> bool {
@@ -120,11 +132,11 @@ impl WasmiPluginRuntime {
             "seed",
             "state_put",
             |mut caller: Caller<'_, PluginHostState>, key: i32, value: i32| -> i32 {
-                if !caller.data().scoped_storage_allowed() {
-                    return HOST_DENY;
+                if caller.data_mut().put_scoped_state(key, value) {
+                    HOST_ALLOW
+                } else {
+                    HOST_DENY
                 }
-                caller.data_mut().state.insert(key, value);
-                HOST_ALLOW
             },
         )?;
         linker.func_wrap(
@@ -139,26 +151,35 @@ impl WasmiPluginRuntime {
         )?;
 
         let instance = linker.instantiate_and_start(&mut store, &module)?;
-        Ok(WasmiPluginInstance { store, instance })
+        Ok(WasmiPluginInstance {
+            store,
+            instance,
+            fuel_per_call: fuel,
+        })
     }
 }
 
 pub struct WasmiPluginInstance {
     store: Store<PluginHostState>,
     instance: Instance,
+    fuel_per_call: u64,
 }
 
 impl WasmiPluginInstance {
     pub fn call_i32(&mut self, export: &str) -> Result<i32, wasmi::Error> {
-        self.instance
-            .get_typed_func::<(), i32>(&self.store, export)?
-            .call(&mut self.store, ())
+        let function = self
+            .instance
+            .get_typed_func::<(), i32>(&self.store, export)?;
+        self.store.set_fuel(self.fuel_per_call)?;
+        function.call(&mut self.store, ())
     }
 
     pub fn call_unit(&mut self, export: &str) -> Result<(), wasmi::Error> {
-        self.instance
-            .get_typed_func::<(), ()>(&self.store, export)?
-            .call(&mut self.store, ())
+        let function = self
+            .instance
+            .get_typed_func::<(), ()>(&self.store, export)?;
+        self.store.set_fuel(self.fuel_per_call)?;
+        function.call(&mut self.store, ())
     }
 
     pub fn remaining_fuel(&self) -> Result<u64, wasmi::Error> {
@@ -294,6 +315,42 @@ mod tests {
 
         assert!(plugin.call_unit("run").is_err());
         assert_eq!(plugin.remaining_fuel().unwrap(), 0);
+    }
+
+    #[test]
+    fn fuel_budget_resets_for_each_call() {
+        const FUEL_PER_CALL: u64 = 10_000;
+
+        let runtime = WasmiPluginRuntime::new();
+        let mut plugin = runtime
+            .instantiate_with_fuel(manifest(), CAPABILITY_PLUGIN, FUEL_PER_CALL)
+            .unwrap();
+
+        assert_eq!(plugin.call_i32("on_load").unwrap(), HOST_DENY);
+        let after_first = plugin.remaining_fuel().unwrap();
+        assert!(after_first < FUEL_PER_CALL);
+
+        assert_eq!(plugin.call_i32("on_load").unwrap(), HOST_DENY);
+        assert_eq!(plugin.remaining_fuel().unwrap(), after_first);
+    }
+
+    #[test]
+    fn scoped_host_state_has_bounded_entry_count() {
+        let mut allowed_manifest = manifest();
+        allowed_manifest
+            .permissions
+            .push(PluginPermission::ScopedStorage);
+        let mut state = PluginHostState::new(allowed_manifest);
+
+        for index in 0..DEFAULT_PLUGIN_STATE_ENTRIES {
+            assert!(state.put_scoped_state(i32::try_from(index).unwrap(), 1));
+        }
+        assert_eq!(state.state.len(), DEFAULT_PLUGIN_STATE_ENTRIES);
+        assert!(!state.put_scoped_state(i32::try_from(DEFAULT_PLUGIN_STATE_ENTRIES).unwrap(), 1));
+
+        assert!(state.put_scoped_state(0, 2));
+        assert_eq!(state.state.len(), DEFAULT_PLUGIN_STATE_ENTRIES);
+        assert_eq!(state.state.get(&0), Some(&2));
     }
 
     #[test]
