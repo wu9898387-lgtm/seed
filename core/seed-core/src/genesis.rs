@@ -594,24 +594,12 @@ mod tests {
         let device = DeviceIdentity::from_secret_bytes([2; 32]);
         let authorization = root.authorize_device(&device, 1, 10);
 
-        let a = GenesisDraft::new(
-            SpaceKind::Group,
-            root.document(),
-            &device,
-            11,
-            [3; 16],
-        )
-        .activate(root.document(), &authorization, &device)
-        .unwrap();
-        let b = GenesisDraft::new(
-            SpaceKind::Group,
-            root.document(),
-            &device,
-            11,
-            [4; 16],
-        )
-        .activate(root.document(), &authorization, &device)
-        .unwrap();
+        let a = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 11, [3; 16])
+            .activate(root.document(), &authorization, &device)
+            .unwrap();
+        let b = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 11, [4; 16])
+            .activate(root.document(), &authorization, &device)
+            .unwrap();
 
         assert_ne!(a.id(), b.id());
         assert_ne!(a.space_id(), b.space_id());
