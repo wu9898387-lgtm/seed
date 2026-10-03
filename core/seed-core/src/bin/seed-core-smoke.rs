@@ -1,3 +1,5 @@
+use std::fs;
+
 use seed_core::{
     event::{Event, EventHeader},
     genesis::{GenesisDraft, GenesisPlugin, GenesisRecord},
@@ -5,6 +7,7 @@ use seed_core::{
     identity::{DeviceIdentity, RootIdentity},
     plugin::PluginVersion,
     space::SpaceKind,
+    storage::{AppendOutcome, FileEventStore},
     PROTOCOL_VERSION,
 };
 
@@ -59,16 +62,41 @@ fn main() {
     )
     .expect("signed event");
 
-    event
+    let encoded_event = event.canonical_bytes().expect("encode event");
+    let decoded_event = Event::from_canonical_bytes(&encoded_event).expect("decode event");
+    decoded_event
         .verify(root.document(), &authorization)
         .expect("verified event");
 
+    let log_path = std::env::temp_dir().join(format!(
+        "seed-core-smoke-{}.log",
+        std::process::id()
+    ));
+    let _ = fs::remove_file(&log_path);
+
+    {
+        let mut store = FileEventStore::open(&log_path).expect("open event log");
+        assert_eq!(
+            store.append(decoded_event.clone()).expect("append event"),
+            AppendOutcome::Inserted
+        );
+    }
+
+    let reopened = FileEventStore::open(&log_path).expect("reopen event log");
+    let restored = reopened.events_for_space(&genesis.space_id());
+    assert_eq!(restored.len(), 1);
+    restored[0]
+        .verify(root.document(), &authorization)
+        .expect("verify restored event");
+    let _ = fs::remove_file(&log_path);
+
     println!(
-        "seed-core protocol={} identity={} genesis={} space={} event={}",
+        "seed-core protocol={} identity={} genesis={} space={} event={} stored={}",
         PROTOCOL_VERSION,
         root.document().id(),
         genesis.id(),
         genesis.space_id(),
-        event.id()
+        event.id(),
+        reopened.len()
     );
 }
