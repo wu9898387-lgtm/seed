@@ -123,7 +123,7 @@ seed/
 - ADR-0006：Direct-first Transport；
 - ADR-0007：Genesis root / Validated Event。
 
-其中 ADR-0001 ~ 0003 已经随 PR #1 合并到 `main` 并有真实实现与测量，其余仍需后续 Spike。
+其中 ADR-0001 ~ 0003 已经随 PR #1 合并到 `main`；ADR-0005 的 std-only append-file baseline 已随 PR #3 合并并有真实持久化/恢复/体积测量。ADR-0005 的最终 backend 仍未 Accepted，其余 ADR 仍需后续 Spike。
 
 ### Exit Criteria
 
@@ -751,12 +751,14 @@ MVP 发布候选必须满足：
 - Capability DefaultDeny 已存在；
 - deterministic protocol vector 已存在；
 - release size CI 已存在；
-- Genesis + 128-bit creation nonce 后 smoke binary 实测约 380.9 KiB；
-- PR #1 已 squash 合并，Core Kernel 已进入主分支。
+- canonical Event record encode/decode 已存在；
+- std-only persistent FileEventStore 已进入 `main`，支持 reopen indexing、duplicate suppression、partial-tail recovery 与 partial-header repair；
+- 同一 CI build 中 `seed-core-smoke` 为 380.8 KiB、`seed-storage-smoke` 为 389.6 KiB，persistent storage path 增量约 8.7 KiB；
+- PR #1（Core Kernel）与 PR #3（persistent storage baseline）均已合并。
 
 下一批优先实现：
 
-1. persistent Event Store（SQLite vs append-file）；
+1. persistent storage 10k / 100k / 1M rebuild + SQLite 对照；
 2. Transport abstraction + Loopback；
 3. TCP Direct + Relay fallback；
 4. Plugin Runtime / Wasm engine size + sandbox comparison；
