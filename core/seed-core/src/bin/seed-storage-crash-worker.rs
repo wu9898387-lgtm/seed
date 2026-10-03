@@ -29,24 +29,21 @@ fn main() {
     let device = DeviceIdentity::from_secret_bytes([0x22; 32]);
     let authorization = root.authorize_device(&device, 1, 0);
 
-    match backend.as_str() {
-        "append-file" => {
-            let mut store = FileEventStore::open(&path).expect("open append-file store");
-            append_events(&mut store, count, &root, &device, &authorization);
-        }
-        "sqlite" => {
-            let mut store = SqliteEventStore::open(&path).expect("open sqlite store");
-            append_events(&mut store, count, &root, &device, &authorization);
-        }
+    let mut store: Box<dyn EventStore> = match backend.as_str() {
+        "append-file" => Box::new(FileEventStore::open(&path).expect("open append-file store")),
+        "sqlite" => Box::new(SqliteEventStore::open(&path).expect("open sqlite store")),
         other => panic!("unsupported backend: {other}"),
-    }
+    };
+
+    append_events(store.as_mut(), count, &root, &device, &authorization);
 
     println!("ready backend={backend} count={count}");
     io::stdout().flush().expect("flush ready marker");
 
     // The parent integration test kills this process after it observes the
-    // marker. Deliberately never checkpoint or cleanly drop the store.
+    // marker. Keep the store alive so there is no checkpoint or clean drop.
     loop {
+        std::hint::black_box(&store);
         thread::park();
     }
 }
