@@ -1,12 +1,30 @@
-use crate::id::{EventId, SpaceId};
+use crate::id::{GenesisId, SpaceId};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
 pub enum SpaceKind {
-    Direct,
-    Group,
-    Tree,
-    Branch,
-    Channel,
+    Direct = 1,
+    Group = 2,
+    Tree = 3,
+    Branch = 4,
+    Channel = 5,
+}
+
+impl SpaceKind {
+    pub(crate) const fn wire_value(self) -> u8 {
+        self as u8
+    }
+
+    pub(crate) const fn from_wire(value: u8) -> Option<Self> {
+        match value {
+            1 => Some(Self::Direct),
+            2 => Some(Self::Group),
+            3 => Some(Self::Tree),
+            4 => Some(Self::Branch),
+            5 => Some(Self::Channel),
+            _ => None,
+        }
+    }
 }
 
 /// Protocol-level description of a space.
@@ -17,5 +35,5 @@ pub enum SpaceKind {
 pub struct SpaceDescriptor {
     pub id: SpaceId,
     pub kind: SpaceKind,
-    pub genesis_event: Option<EventId>,
+    pub genesis: Option<GenesisId>,
 }
