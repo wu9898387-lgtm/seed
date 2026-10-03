@@ -413,13 +413,12 @@ fresh-install footprint
 
 ```
 1. fixed-environment storage 10k / 100k / 1M repeated benchmark + mid-write / torn-write / power-loss fault injection
-2. TCP Direct + Relay fallback — **DONE (raw transport); secure session pending**
-3. Identity-authenticated secure session / KEX / E2EE，验证 Relay 只见 ciphertext envelope
-4. Plugin Runtime comparison
-5. Governance vertical slice
-6. Device revocation / key lifecycle
-7. Multi-node smoke framework
-8. Tree Host
+2. Identity-authenticated secure session / KEX / E2EE + reconnect/replay policy，验证 Relay 只见 ciphertext envelope
+3. Plugin Runtime comparison
+4. Governance vertical slice
+5. Device revocation / key lifecycle
+6. Multi-node smoke framework
+7. Tree Host
 ```
 
 不要先做复杂 UI、语音视频或插件市场。
