@@ -16,7 +16,7 @@ Seed 需要同时支持：
 - Tree Host 持久化；
 - 插件状态。
 
-当前 `core-kernel-spike` 已经有 append-only in-memory Event Store 与 duplicate suppression，可用于证明基本接口，但还不是持久化方案。
+当前 `main` 已经有 append-only in-memory Event Store 与 duplicate suppression，可用于证明基本接口，但还不是持久化方案。
 
 如果只同步“当前数据库表”，很难证明状态变化过程，也难以正确验证治理历史。
 
@@ -60,6 +60,36 @@ Phase 0 比较：
 - 简单 append-only file + index。
 
 优先正确性、crash recovery、跨平台与体积，不为了节省少量体积自行实现一个脆弱数据库。
+
+### 当前 append-only file spike
+
+`phase0/persistent-event-store-spike-20261003` 增加了最小 `FileEventStore`，用于先验证文件日志这一候选方向的底层语义，而不是提前决定最终 backend。
+
+当前 spike 明确实现：
+
+- 独立文件头与版本化 record framing；
+- EventId 幂等去重；
+- append 后 `sync_data`；
+- 重启后扫描恢复；
+- 恢复时重新计算 content-derived EventId；
+- 末尾长度前缀半写 / record 半写时截断到最后完整记录；
+- 完整但损坏的 record fail-closed，不静默跳过；
+- 单 record 16 MiB 上限，避免损坏长度导致无界分配。
+
+该 on-disk framing 是 **storage implementation detail**，不是 Seed network wire format，也不冻结 Event 协议编码。
+
+仍未完成：
+
+- SQLite 对照实现；
+- 10k / 100k Event benchmark；
+- crash/kill 注入矩阵；
+- fsync 策略与批量提交权衡；
+- index / recent-history query；
+- materialized view checkpoint；
+- 插件 state namespace；
+- hostile local disk tampering 后的全链签名重验证流程。
+
+因此 ADR 状态保持 **Proposed**。
 
 ## Blob / Attachment
 
