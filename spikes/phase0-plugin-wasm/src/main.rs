@@ -1,3 +1,8 @@
+use seed_core::codec::{encode_event_for_signing, SignableEvent};
+use seed_core::crypto::{verify_event_signature, EventSigningKey};
+use seed_core::event::EventKind;
+use seed_core::identity::{DeviceId, IdentityId};
+use seed_core::space::SpaceId;
 use wasmi::{Config, Engine, Linker, Module, Store};
 
 const ADD_ONE_WASM: &[u8] = &[
@@ -7,6 +12,27 @@ const ADD_ONE_WASM: &[u8] = &[
     0x07, 0x0b, 0x01, 0x07, b'a', b'd', b'd', b'_', b'o', b'n', b'e', 0x00, 0x00, // export
     0x0a, 0x09, 0x01, 0x07, 0x00, 0x20, 0x00, 0x41, 0x01, 0x6a, 0x0b, // code
 ];
+
+fn verify_seed_event_path() {
+    let event = SignableEvent {
+        space: SpaceId::from_bytes([0x22; 32]),
+        author: IdentityId::from_bytes([0x33; 32]),
+        device: DeviceId::from_bytes([0x44; 32]),
+        kind: EventKind::MESSAGE,
+        payload: b"hello",
+    };
+
+    let mut canonical = [0u8; 119];
+    let written =
+        encode_event_for_signing(&event, &mut canonical).expect("fixed Event vector must encode");
+
+    let signing_key = EventSigningKey::from_secret_bytes(&[0x11; 32]);
+    let public_key = signing_key.verifying_key_bytes();
+    let signature = signing_key.sign(&canonical[..written]);
+
+    verify_event_signature(&public_key, &canonical[..written], &signature)
+        .expect("integrated Event signature must verify");
+}
 
 fn run_plugin(input: i32) -> Result<(i32, u64), wasmi::Error> {
     let mut config = Config::default();
@@ -27,6 +53,7 @@ fn run_plugin(input: i32) -> Result<(i32, u64), wasmi::Error> {
 }
 
 fn main() -> Result<(), wasmi::Error> {
+    verify_seed_event_path();
     let (result, remaining_fuel) = run_plugin(41)?;
     assert_eq!(result, 42);
     assert!(remaining_fuel < 10_000);
@@ -43,6 +70,7 @@ mod tests {
 
     #[test]
     fn validated_wasm_executes_inside_fuel_budget() {
+        super::verify_seed_event_path();
         let (result, remaining_fuel) = run_plugin(41).unwrap();
         assert_eq!(result, 42);
         assert!(remaining_fuel < 10_000);
