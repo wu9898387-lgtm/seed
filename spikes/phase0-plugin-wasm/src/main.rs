@@ -82,7 +82,7 @@ mod tests {
 
         let config = Config::default();
         let engine = Engine::new(&config);
-        assert!(Module::new(&engine, &[0x00, 0x61, 0x73]).is_err());
+        assert!(Module::new(&engine, [0x00, 0x61, 0x73]).is_err());
     }
 
     #[test]
