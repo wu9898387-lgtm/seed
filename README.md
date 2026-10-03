@@ -186,8 +186,13 @@ Seed 希望保持一个非常小的基础核心。
 - 把业务功能硬编码进 Core
 - 重复实现系统已经可靠提供的能力
 
+## 核心文档
+
+- [产品需求文档（PRD）](docs/PRD.md) — 定义产品范围、目标用户、核心流程、功能需求、MVP 和验收标准。
+- [初步架构草案](docs/architecture.md) — 记录当前系统模型与概念结构。
+- [整体设计目标](docs/design-goals.md) — 固定架构不变量、安全边界、协议与模块设计原则。
+- [实现目标与开发路线](docs/implementation-goals.md) — 定义技术 Spike、开发阶段、测试目标、Size Budget 与发布 Gate。
+
 ## 状态
 
 项目处于非常早期的架构探索阶段。本文档记录当前方向，不代表协议已经冻结。
-
-更详细的初步架构见 [docs/architecture.md](docs/architecture.md).
