@@ -4,7 +4,7 @@
 /// signatures, fingerprints, rotation, and recovery remain behind the future
 /// crypto/identity boundary.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct IdentityId([u8; Self::LEN]);
+pub struct IdentityId([u8; 32]);
 
 impl IdentityId {
     pub const LEN: usize = 32;
@@ -20,7 +20,7 @@ impl IdentityId {
 
 /// Opaque device identifier authorized by an identity.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct DeviceId([u8; Self::LEN]);
+pub struct DeviceId([u8; 32]);
 
 impl DeviceId {
     pub const LEN: usize = 32;
