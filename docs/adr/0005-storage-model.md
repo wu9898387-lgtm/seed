@@ -16,7 +16,7 @@ Seed 需要同时支持：
 - Tree Host 持久化；
 - 插件状态。
 
-当前 `core-kernel-spike` 已经有 append-only in-memory Event Store 与 duplicate suppression，可用于证明基本接口，但还不是持久化方案。
+当前 `main` 有 append-only in-memory Event Store；`storage-spike` 进一步加入了 append-only file baseline 与 partial-tail recovery。
 
 如果只同步“当前数据库表”，很难证明状态变化过程，也难以正确验证治理历史。
 
@@ -52,12 +52,38 @@ checkpoint()
 
 ## MVP backend
 
-持久化 backend 尚未 Accepted。
+持久化 backend 尚未 Accepted，但 append-only file baseline 已完成第一轮 Spike。
 
-Phase 0 比较：
+### Append-only file baseline
+
+当前实现：
+
+- 不新增第三方依赖；
+- versioned log header；
+- length-prefixed canonical Event record；
+- persisted EventId integrity check；
+- reopen 时重建 in-memory index；
+- duplicate suppression；
+- interrupted final record 自动截断到最后完整记录；
+- completed-record corruption 返回错误，不静默跳过；
+- 每次 append 当前调用 flush + sync_data，优先验证 durability 语义。
+
+同一 CI 构建下：
+
+- seed-core-smoke：389,976 B / 380.8 KiB；
+- seed-storage-smoke：398,904 B / 389.6 KiB；
+- persistent file storage path 增量：8,928 B / ~8.7 KiB。
+
+这说明文件日志在二进制体积上非常便宜，但仍未证明它在大历史、索引和查询方面优于 SQLite。
+
+### 仍需比较
 
 - SQLite adapter；
-- 简单 append-only file + index。
+- 10k / 100k / 1M Event reopen/rebuild；
+- batch durability；
+- random recent-history query；
+- concurrent reader / writer needs；
+- crash fault injection。
 
 优先正确性、crash recovery、跨平台与体积，不为了节省少量体积自行实现一个脆弱数据库。
 
