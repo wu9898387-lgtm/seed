@@ -88,4 +88,8 @@ fn main() {
     );
     println!("event_id={}", event.id());
     println!("event_signature={}", hex(event.signature().as_bytes()));
+    println!(
+        "event_bytes={}",
+        hex(&event.canonical_bytes().expect("encode event"))
+    );
 }
