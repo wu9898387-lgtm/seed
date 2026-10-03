@@ -1,6 +1,6 @@
 # Phase 0 Spike — WASM Plugin Runtime
 
-> Status: running
+> Status: measured
 
 ## Configuration
 
@@ -43,6 +43,16 @@ It does not yet prove:
 
 ## Measurement
 
-CI compares the stripped Linux release binary against the existing Phase 0
-kernel baseline. This gives a first-order answer to whether an embedded WASM
-interpreter is compatible with the 2 MiB ambition.
+GitHub Actions on Ubuntu 24.04 / Rust 1.99.0 measured:
+
+- canonical Event + crypto: **355,624 bytes (348 KiB)**;
+- integrated Seed + WASM host: **1,274,376 bytes (1,245 KiB)**;
+- runtime increment over Event + crypto: **918,752 bytes**;
+- integrated utilization of the 2 MiB reference target: about **60.8%**;
+- remaining reference headroom: **822,776 bytes**.
+
+The integrated executable actively exercises both the Seed Event/signature path
+and the WASM module path so dead-code elimination cannot remove either side.
+
+This is a first-order linked-size measurement, not a final installed-size or
+resident-memory estimate.
