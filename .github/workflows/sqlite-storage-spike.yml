@@ -6,6 +6,7 @@ on:
       - "core/seed-core/Cargo.toml"
       - "core/seed-core/src/sqlite_storage.rs"
       - "core/seed-core/src/bin/seed-sqlite-storage-smoke.rs"
+      - "core/seed-core/src/bin/seed-storage-compare.rs"
       - "core/seed-core/src/storage.rs"
       - "tools/sqlite-size-report.sh"
       - ".github/workflows/sqlite-storage-spike.yml"
@@ -32,5 +33,9 @@ jobs:
         run: cargo test --workspace --features sqlite-storage-bundled
       - name: SQLite storage smoke
         run: cargo run --quiet --features sqlite-storage-bundled --bin seed-sqlite-storage-smoke
+      - name: Storage comparison benchmark (10k)
+        env:
+          SEED_STORAGE_BENCH_COUNTS: "10000"
+        run: cargo run --quiet --release --features sqlite-storage-bundled --bin seed-storage-compare
       - name: SQLite size comparison
         run: sh tools/sqlite-size-report.sh
