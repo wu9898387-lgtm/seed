@@ -59,8 +59,7 @@ mod tests {
 
         assert!(verify_event_signature(&public_key, MESSAGE, &signature).is_ok());
 
-        let mut tampered = *MESSAGE;
-        tampered[0] ^= 1;
-        assert!(verify_event_signature(&public_key, &tampered, &signature).is_err());
+        let tampered = b"Seed:phase0:event-signature:v1";
+        assert!(verify_event_signature(&public_key, tampered, &signature).is_err());
     }
 }
