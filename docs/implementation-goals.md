@@ -123,7 +123,7 @@ seed/
 - ADR-0006：Direct-first Transport；
 - ADR-0007：Genesis root / Validated Event。
 
-其中 ADR-0001 ~ 0003 已经在 `core-kernel-spike` 中有实现和测量，其余仍需后续 Spike。
+其中 ADR-0001 ~ 0003 已经随 PR #1 合并到 `main` 并有真实实现与测量，其余仍需后续 Spike。
 
 ### Exit Criteria
 
@@ -741,7 +741,7 @@ MVP 发布候选必须满足：
 
 ## 21. 当前实现进度与下一步
 
-截至当前 `core-kernel-spike`：
+截至当前 `main`：
 
 - Rust baseline 已完成；
 - Identity / DeviceAuthorization 已完成第一版；
@@ -751,17 +751,18 @@ MVP 发布候选必须满足：
 - Capability DefaultDeny 已存在；
 - deterministic protocol vector 已存在；
 - release size CI 已存在；
-- Genesis 后 smoke binary 实测约 380.7 KiB。
+- Genesis + 128-bit creation nonce 后 smoke binary 实测约 380.9 KiB；
+- PR #1 已 squash 合并，Core Kernel 已进入主分支。
 
 下一批优先实现：
 
-1. 给 Genesis 加入显式随机 creation nonce，并 version-bump test vector；
-2. 让当前 Core Kernel PR 保持 merge-ready；
-3. persistent Event Store（SQLite vs append-file）；
-4. Transport abstraction + Loopback；
-5. TCP Direct + Relay fallback；
-6. Plugin Runtime / Wasm engine size + sandbox comparison；
-7. Governance Allow / Deny / Pending 纵向切片；
+1. persistent Event Store（SQLite vs append-file）；
+2. Transport abstraction + Loopback；
+3. TCP Direct + Relay fallback；
+4. Plugin Runtime / Wasm engine size + sandbox comparison；
+5. Governance Allow / Deny / Pending 纵向切片；
+6. Device revocation / key lifecycle；
+7. Multi-node smoke framework；
 8. Tree Host。
 
 项目现在已经从“产品理念”进入“可执行工程 Spike”，但尚未进入面向用户的 MVP 功能堆叠阶段。
