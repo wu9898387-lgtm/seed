@@ -169,12 +169,13 @@ impl FileEventStore {
                 offset += 32;
 
                 let event_end = offset + event_len;
-                let event = Event::from_canonical_bytes(&bytes[offset..event_end]).map_err(
-                    |reason| FileStoreError::CorruptEvent {
-                        offset: record_start as u64,
-                        reason,
-                    },
-                )?;
+                let event =
+                    Event::from_canonical_bytes(&bytes[offset..event_end]).map_err(|reason| {
+                        FileStoreError::CorruptEvent {
+                            offset: record_start as u64,
+                            reason,
+                        }
+                    })?;
                 offset = event_end;
 
                 if event.id() != expected_id {
@@ -262,12 +263,7 @@ fn recover_partial_tail(file: &mut File, valid_len: usize) -> Result<(), FileSto
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs::OpenOptions,
-        io::Write,
-        path::PathBuf,
-        process,
-    };
+    use std::{fs::OpenOptions, io::Write, path::PathBuf, process};
 
     use crate::{
         event::{Event, EventHeader},
