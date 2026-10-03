@@ -201,8 +201,16 @@ Seed 希望保持一个非常小的基础核心。
 
 项目已经从纯概念阶段进入 **Phase 0 / Core Kernel Spike**。
 
-当前 `main` 已经包含 Root/Device signing、DeviceAuthorization、signed Event、Capability DefaultDeny、Genesis schema/wire v2、128-bit creation nonce、plugin digest pinning、deterministic protocol vector v2 和 release-size CI。
+当前主线基线已经包含 Root/Device signing、DeviceAuthorization、signed Event、Capability DefaultDeny、Genesis schema/wire v2、128-bit creation nonce、plugin digest pinning、deterministic protocol vector v2 和 release-size CI。
 
-当前 Genesis + creation nonce 后的 `seed-core` smoke binary 实测约 **380.9 KiB**（Linux x86_64 stripped release）。这只是阶段性基线，不包含 persistent storage、Transport 和 Plugin Runtime。
+当前 persistent storage Spike 已实现第一版 **append-only file Event Store candidate**：canonical Event wire、EventId 去重、重启索引重建、frame checksum、oversized frame 防护，以及只针对 incomplete final frame 的显式尾部恢复。它仍是 ADR-0005 的候选，不代表已经胜过 SQLite。
 
-协议仍未冻结。Genesis uniqueness 已进入测试基线；当前优先级转为持久化 Event Store、Transport/Relay 与插件沙箱。
+同一 Linux x86_64 stripped release CI 下：
+
+- `seed-core-smoke`：**390,328 B / 381.2 KiB**；
+- `seed-storage-smoke`：**418,064 B / 408.3 KiB**；
+- persistent storage linked delta：**27,736 B / 27.1 KiB**。
+
+这说明第一版零新增依赖的 append-file 路径对 2 MiB 目标压力很小，但最终 storage 选择仍要完成 SQLite、10k/100k rebuild、throughput、query 与 crash recovery 对照。
+
+协议仍未冻结。下一优先级是完成 persistent storage comparison，然后进入 Transport abstraction + Loopback、Direct/Relay 与插件沙箱。
