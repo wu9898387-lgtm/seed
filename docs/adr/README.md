@@ -11,7 +11,7 @@ ADR 用于记录 Seed 的重大技术与协议决策。
 
 ## 当前编号
 
-ADR-0001 ~ ADR-0003 已随 PR #1 合并到 `main`：
+ADR-0001 ~ ADR-0003 已随 PR #1 合并到 `main`；ADR-0005 已随 PR #3 获得第一轮持久化实现证据：
 
 | ADR | 主题 | 当前状态 |
 |---|---|---|
@@ -19,7 +19,7 @@ ADR-0001 ~ ADR-0003 已随 PR #1 合并到 `main`：
 | [0002](0002-identity-keys.md) | Root and Device signing keys | Provisional |
 | [0003](0003-canonical-encoding.md) | Narrow canonical binary encoding for signed kernel records | Provisional |
 | [0004](0004-plugin-runtime.md) | Wasm + Seed Host ABI | Proposed |
-| [0005](0005-storage-model.md) | Validated Event Log + Materialized View | Proposed |
+| [0005](0005-storage-model.md) | Validated Event Log + Materialized View | Provisional |
 | [0006](0006-transport.md) | Direct-first + Relay fallback | Proposed |
 | [0007](0007-event-genesis.md) | Genesis root + Validated Event | Proposed |
 
