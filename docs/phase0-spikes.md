@@ -244,7 +244,7 @@ on_load -> success
 
 ## 7. Spike E — Transport
 
-**IN PROGRESS — Loopback abstraction PR #6 CI green**
+**IN PROGRESS — Loopback abstraction merged; TCP / Relay pending**
 
 先建立统一 abstraction，再实现：
 
@@ -387,7 +387,7 @@ fresh-install footprint
 
 ```
 1. persistent storage 10k / 100k / 1M reopen/rebuild benchmark + SQLite 同条件对照
-2. Transport abstraction + Loopback
+2. Transport abstraction + Loopback — **DONE**
 3. TCP Direct + Relay fallback
 4. Plugin Runtime comparison
 5. Governance vertical slice
