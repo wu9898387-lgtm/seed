@@ -313,7 +313,9 @@ impl GenesisRecord {
         let mut encoder = Encoder::with_capacity(4 + 2 + 4 + unsigned.len() + 64);
         encoder.fixed(GENESIS_WIRE_MAGIC);
         encoder.u16(GENESIS_WIRE_VERSION);
-        encoder.bytes(&unsigned).map_err(GenesisEncodeError::Codec)?;
+        encoder
+            .bytes(&unsigned)
+            .map_err(GenesisEncodeError::Codec)?;
         encoder.fixed(self.signature.as_bytes());
         Ok(encoder.finish())
     }
@@ -335,8 +337,7 @@ impl GenesisRecord {
             return Err(GenesisDecodeError::BodyTooLarge);
         }
 
-        let signature =
-            Signature::from_bytes(decoder.fixed().map_err(GenesisDecodeError::Codec)?);
+        let signature = Signature::from_bytes(decoder.fixed().map_err(GenesisDecodeError::Codec)?);
         decoder.finish().map_err(GenesisDecodeError::Codec)?;
 
         let draft = GenesisDraft::decode_unsigned(unsigned)?;
@@ -361,9 +362,7 @@ impl GenesisRecord {
             .verify_against(identity)
             .map_err(GenesisVerifyError::Identity)?;
 
-        if self.creator() != identity.id()
-            || self.creator_device() != authorization.device_id()
-        {
+        if self.creator() != identity.id() || self.creator_device() != authorization.device_id() {
             return Err(GenesisVerifyError::ActorMismatch);
         }
 
@@ -380,8 +379,7 @@ impl GenesisRecord {
             return Err(GenesisVerifyError::IdMismatch);
         }
 
-        let expected_space =
-            SpaceId::from_bytes(hash32(SPACE_ID_DOMAIN, &[self.id.as_bytes()]));
+        let expected_space = SpaceId::from_bytes(hash32(SPACE_ID_DOMAIN, &[self.id.as_bytes()]));
         if expected_space != self.space_id {
             return Err(GenesisVerifyError::SpaceIdMismatch);
         }
