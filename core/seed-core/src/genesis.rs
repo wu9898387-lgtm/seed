@@ -564,23 +564,20 @@ mod tests {
 
     #[test]
     fn tampered_genesis_body_fails_signature_verification() {
-        let root = RootIdentity::from_secret_bytes([1; 32]);
-        let device = DeviceIdentity::from_secret_bytes([2; 32]);
+        let root = RootIdentity::generate().unwrap();
+        let device = DeviceIdentity::generate().unwrap();
         let authorization = root.authorize_device(&device, 1, 10);
 
         let mut draft = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 11, [3; 16]);
-        let config = b"tamper-target-7c19";
-        draft.add_plugin(plugin(1, config)).unwrap();
+        draft.add_plugin(plugin(1, b"one")).unwrap();
         let record = draft
             .activate(root.document(), &authorization, &device)
             .unwrap();
 
         let mut encoded = record.canonical_bytes().unwrap();
-        let config_start = encoded
-            .windows(config.len())
-            .position(|window| window == config)
-            .expect("plugin config bytes");
-        encoded[config_start] ^= 0x01;
+        let wire_prefix_bytes = GENESIS_WIRE_MAGIC.len() + 2 + 4;
+        let created_at_offset = wire_prefix_bytes + 2 + 2 + 1 + 32 + 32;
+        encoded[created_at_offset] ^= 0x01;
 
         let tampered = GenesisRecord::from_canonical_bytes(&encoded).unwrap();
         assert_eq!(
