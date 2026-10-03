@@ -54,6 +54,10 @@ This number is intentionally only a kernel baseline. Crypto, canonical
 serialization, persistent storage, networking implementation, and plugin
 runtime are not included yet and must be measured as separate increments.
 
+The first Ed25519 signature spike then measured **354,936 bytes (347 KiB)**,
+a **71,520-byte** linked-binary increase over the kernel baseline. Format,
+tests, and clippy all passed before the size measurement.
+
 ## What this spike does not decide
 
 It intentionally does not freeze:
