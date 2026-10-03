@@ -68,8 +68,38 @@ derivation into the release smoke path:
   gate all passed.
 
 At this point Identity + Device authorization + Event signing + canonical Genesis
-still occupy well under one quarter of the 2 MB target. Persistent storage,
-transport, and plugin runtime remain the meaningful size-risk areas.
+still occupy well under one quarter of the 2 MB target.
+
+## Genesis nonce follow-up
+
+Adding the explicit 128-bit Genesis creation nonce changed the release smoke from
+389,816 bytes to **389,992 bytes (380.9 KiB)**, a delta of only 176 bytes.
+
+## Event wire + persistent storage measurement
+
+After adding:
+
+- explicit Event schema/wire versioning and canonical SEVT bytes;
+- canonical Event decode/re-encode checks;
+- append-only FileEventStore;
+- SLOG file/version header;
+- per-record canonical Event length and SHA-256 corruption checksum;
+- duplicate suppression;
+- restart replay;
+- fail-closed truncated-tail and checksum-corruption handling;
+- post-replay cryptographic Event re-verification in the smoke path;
+
+the same stripped/LTO release smoke measured:
+
+- smoke binary: **415,648 bytes (405.9 KiB)**;
+- delta from the Genesis-nonce build: **25,656 bytes (about 25.1 KiB)**;
+- total delta from the dependency-free baseline: **133,000 bytes (about 129.9 KiB)**;
+- tests: **28 unit tests + 1 protocol-vector integration test passed**;
+- rustfmt, cargo check, Clippy with warnings denied, vector smoke, tests, and
+  release-size gate all passed.
+
+This first persistent-storage implementation adds no new third-party dependency.
+Transport and plugin runtime now remain the largest unresolved Core size risks.
 
 ## Consequences
 
