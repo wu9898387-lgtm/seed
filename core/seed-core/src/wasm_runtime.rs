@@ -13,6 +13,7 @@ use crate::{
 pub const DEFAULT_PLUGIN_FUEL: u64 = 50_000;
 pub const DEFAULT_PLUGIN_MEMORY_BYTES: usize = 64 * 1024;
 pub const DEFAULT_PLUGIN_STATE_ENTRIES: usize = 1024;
+pub const DEFAULT_PLUGIN_HOST_CALLS_PER_INVOCATION: u32 = 1024;
 pub const SUPPORTED_PLUGIN_MANIFEST_VERSION: u16 = 1;
 
 pub const HOST_DENY: i32 = 0;
@@ -29,6 +30,7 @@ pub const CAPABILITY_MEMBER_REMOVE: i32 = 1;
 struct PluginHostState {
     manifest: PluginManifest,
     state: BTreeMap<i32, i32>,
+    host_calls_remaining: u32,
     limits: StoreLimits,
 }
 
@@ -37,6 +39,7 @@ impl PluginHostState {
         Self {
             manifest,
             state: BTreeMap::new(),
+            host_calls_remaining: DEFAULT_PLUGIN_HOST_CALLS_PER_INVOCATION,
             limits: StoreLimitsBuilder::new()
                 .memory_size(DEFAULT_PLUGIN_MEMORY_BYTES)
                 .instances(1)
@@ -63,6 +66,18 @@ impl PluginHostState {
             return false;
         }
         self.state.insert(key, value);
+        true
+    }
+
+    fn reset_host_calls(&mut self, budget: u32) {
+        self.host_calls_remaining = budget;
+    }
+
+    fn consume_host_call(&mut self) -> bool {
+        if self.host_calls_remaining == 0 {
+            return false;
+        }
+        self.host_calls_remaining -= 1;
         true
     }
 
@@ -104,7 +119,12 @@ impl WasmiPluginRuntime {
         manifest: PluginManifest,
         wasm: &[u8],
     ) -> Result<WasmiPluginInstance, wasmi::Error> {
-        self.instantiate_with_fuel(manifest, wasm, DEFAULT_PLUGIN_FUEL)
+        self.instantiate_with_budget(
+            manifest,
+            wasm,
+            DEFAULT_PLUGIN_FUEL,
+            DEFAULT_PLUGIN_HOST_CALLS_PER_INVOCATION,
+        )
     }
 
     pub fn instantiate_with_fuel(
@@ -112,6 +132,21 @@ impl WasmiPluginRuntime {
         manifest: PluginManifest,
         wasm: &[u8],
         fuel: u64,
+    ) -> Result<WasmiPluginInstance, wasmi::Error> {
+        self.instantiate_with_budget(
+            manifest,
+            wasm,
+            fuel,
+            DEFAULT_PLUGIN_HOST_CALLS_PER_INVOCATION,
+        )
+    }
+
+    pub fn instantiate_with_budget(
+        &self,
+        manifest: PluginManifest,
+        wasm: &[u8],
+        fuel: u64,
+        host_calls: u32,
     ) -> Result<WasmiPluginInstance, wasmi::Error> {
         if manifest.manifest_version != SUPPORTED_PLUGIN_MANIFEST_VERSION {
             return Err(wasmi::Error::new("unsupported Seed plugin manifest version"));
@@ -129,7 +164,10 @@ impl WasmiPluginRuntime {
         linker.func_wrap(
             "seed",
             "capability_allowed",
-            |caller: Caller<'_, PluginHostState>, code: i32| -> i32 {
+            |mut caller: Caller<'_, PluginHostState>, code: i32| -> i32 {
+                if !caller.data_mut().consume_host_call() {
+                    return HOST_DENY;
+                }
                 if caller.data().capability_allowed(code) {
                     HOST_ALLOW
                 } else {
@@ -141,6 +179,9 @@ impl WasmiPluginRuntime {
             "seed",
             "state_put",
             |mut caller: Caller<'_, PluginHostState>, key: i32, value: i32| -> i32 {
+                if !caller.data_mut().consume_host_call() {
+                    return HOST_DENY;
+                }
                 if caller.data_mut().put_scoped_state(key, value) {
                     HOST_ALLOW
                 } else {
@@ -151,7 +192,10 @@ impl WasmiPluginRuntime {
         linker.func_wrap(
             "seed",
             "state_get",
-            |caller: Caller<'_, PluginHostState>, key: i32| -> i32 {
+            |mut caller: Caller<'_, PluginHostState>, key: i32| -> i32 {
+                if !caller.data_mut().consume_host_call() {
+                    return 0;
+                }
                 if !caller.data().scoped_storage_allowed() {
                     return 0;
                 }
@@ -164,6 +208,7 @@ impl WasmiPluginRuntime {
             store,
             instance,
             fuel_per_call: fuel,
+            host_calls_per_call: host_calls,
         })
     }
 }
@@ -172,6 +217,7 @@ pub struct WasmiPluginInstance {
     store: Store<PluginHostState>,
     instance: Instance,
     fuel_per_call: u64,
+    host_calls_per_call: u32,
 }
 
 impl WasmiPluginInstance {
@@ -179,16 +225,36 @@ impl WasmiPluginInstance {
         let function = self
             .instance
             .get_typed_func::<(), i32>(&self.store, export)?;
-        self.store.set_fuel(self.fuel_per_call)?;
-        function.call(&mut self.store, ())
+        let state_before = self.prepare_invocation()?;
+        match function.call(&mut self.store, ()) {
+            Ok(value) => Ok(value),
+            Err(error) => {
+                self.store.data_mut().state = state_before;
+                Err(error)
+            }
+        }
     }
 
     pub fn call_unit(&mut self, export: &str) -> Result<(), wasmi::Error> {
         let function = self
             .instance
             .get_typed_func::<(), ()>(&self.store, export)?;
+        let state_before = self.prepare_invocation()?;
+        match function.call(&mut self.store, ()) {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                self.store.data_mut().state = state_before;
+                Err(error)
+            }
+        }
+    }
+
+    fn prepare_invocation(&mut self) -> Result<BTreeMap<i32, i32>, wasmi::Error> {
         self.store.set_fuel(self.fuel_per_call)?;
-        function.call(&mut self.store, ())
+        self.store
+            .data_mut()
+            .reset_host_calls(self.host_calls_per_call);
+        Ok(self.store.data().state.clone())
     }
 
     pub fn remaining_fuel(&self) -> Result<u64, wasmi::Error> {
@@ -197,6 +263,10 @@ impl WasmiPluginInstance {
 
     pub fn scoped_state(&self, key: i32) -> Option<i32> {
         self.store.data().state.get(&key).copied()
+    }
+
+    pub fn remaining_host_calls(&self) -> u32 {
+        self.store.data().host_calls_remaining
     }
 }
 
