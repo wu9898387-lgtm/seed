@@ -1,7 +1,7 @@
 # Seed Protocol Kernel Draft
 
 > Status: Experimental / not frozen  
-> 当前实现分支：`core-kernel-spike`  
+> 当前实现：`main` / `core/seed-core`  
 > 当前 Core protocol constant：v1
 
 本文档描述“目前正在实现和验证的协议内核”，不是公开稳定协议承诺。
@@ -149,6 +149,7 @@ Channel
 - creator IdentityId；
 - creator DeviceId；
 - created_at_ms；
+- 128-bit creation_nonce；
 - Genesis plugins。
 
 每个 Genesis plugin 包含：
@@ -201,18 +202,20 @@ SpaceId = SHA-256(
 )
 ```
 
-### Protocol-freeze blocker: creation nonce
+### Creation nonce 已进入 Genesis schema/wire v2
 
-当前 Genesis v1 Spike 没有独立随机 creation nonce。
+Genesis 现在包含显式 128-bit `creation_nonce`，并被 canonical unsigned bytes 与 Device signature 覆盖。
 
-协议冻结前应增加高熵随机 nonce，使 Space uniqueness 不依赖 wall clock。
+因此即使：
 
-该变更必须：
+- 创建身份相同；
+- 设备相同；
+- `created_at_ms` 相同；
+- 插件与配置完全相同；
 
-- version-bump；
-- 更新 canonical vector；
-- 更新 GenesisId / SpaceId test vectors；
-- 不得静默改变现有 v1 编码。
+只要 nonce 不同，就会得到不同的 GenesisId / SpaceId。
+
+该 wire-breaking change 已通过 schema/wire v2 和 protocol vector v2 显式表达，没有静默重定义旧 v1 bytes。
 
 ---
 
@@ -394,7 +397,7 @@ Tree Host 能：
 
 ## 15. Test vectors
 
-当前实现分支已经有 deterministic Identity -> DeviceAuthorization -> Genesis -> Event vector。
+当前 `main` 已经有 deterministic Identity -> DeviceAuthorization -> Genesis -> Event vector v2。
 
 现有 vector 固定：
 
@@ -419,7 +422,7 @@ Tree Host 能：
 
 在把协议称为 Stable/Alpha wire contract 前，至少完成：
 
-1. Genesis explicit nonce；
+1. Genesis explicit nonce — **done**；
 2. Device revocation model；
 3. canonical decoder fuzzing；
 4. independent/cross-language canonical vector；
