@@ -93,6 +93,19 @@ Genesis must not automatically reuse this fixed Event framing. Genesis has
 plugin/config collections and needs an explicit evolution story before its
 canonical form is frozen.
 
+## Current evidence
+
+The fixed Event preimage is now implemented without allocation or third-party
+serialization dependencies. CI freezes field offsets, signs the complete
+119-byte vector with the Phase 0 Ed25519 key, and rejects drift through an exact
+signature assertion.
+
+The linked release binary grew from **354,936 bytes** for the crypto spike to
+**355,624 bytes** for canonical Event + crypto, a **688-byte** increment.
+
+This supports keeping the narrow Event framing for the next Phase 0 steps, but
+does not resolve the general Genesis/wire-format choice.
+
 ## Acceptance evidence still required
 
 - exact Event test vector in CI;
