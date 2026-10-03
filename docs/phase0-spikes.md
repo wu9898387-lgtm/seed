@@ -7,7 +7,7 @@
 
 ## 1. 已有证据
 
-PR #1 已 squash 合并到 `main`，第一批 Core Kernel 实现和 CI 测量已经成为主分支基线。
+PR #1 已 squash 合并到 `main`；PR #3 的 std-only persistent FileEventStore baseline 也已进入 `main`。当前分支是在该主线基线上继续强化 Event wire、corruption detection、显式 tail recovery 与可重复 CI 测量。
 
 当前已验证：
 
@@ -27,8 +27,8 @@ PR #1 已 squash 合并到 `main`，第一批 Core Kernel 实现和 CI 测量已
 - deterministic protocol vector；
 - canonical Event wire encode/decode；
 - append-only in-memory Event Store；
-- append-only file Event Store candidate；
-- restart index rebuild / checksum corruption detection / explicit tail recovery；
+- PR #3 已合并的 std-only append-only FileEventStore baseline；
+- 当前强化候选的 bounded Event wire、restart index rebuild、frame checksum corruption detection 与 explicit tail recovery；
 - release-size CI。
 
 ### 当前 size baseline
@@ -41,8 +41,9 @@ Linux x86_64 release / stripped：
 | identity + signing/event | 376,320 B / 367.5 KiB |
 | + Genesis canonical state machine | 389,816 B / 380.7 KiB |
 | + explicit 128-bit creation nonce | 389,992 B / 380.9 KiB |
-| current core smoke（含 Event wire） | 390,328 B / 381.2 KiB |
-| append-file storage smoke | 418,064 B / 408.3 KiB |
+| PR #3 persistent file-store baseline | 398,904 B / 389.6 KiB |
+| current core smoke（含 bounded Event wire） | 390,328 B / 381.2 KiB |
+| current hardened storage smoke | 418,064 B / 408.3 KiB |
 
 同一 CI commit 下，`seed-storage-smoke` 相对 `seed-core-smoke` 的链接后增量为 **27,736 B / 27.1 KiB**。
 这不是最终数据库占用或历史数据文件大小，只是当前 persistent storage code path 的 release binary delta。
@@ -68,7 +69,7 @@ Identity + signing + Event + Genesis + 第一版 append-file storage 仍远低�
 - persistent storage smoke；
 - release size（core + storage candidate delta）。
 
-最新检查已恢复为绿色。
+最新完整检查为绿色：31 个 unit tests + 1 个 protocol-vector integration test 通过，且 `seed-storage-smoke` 已实际执行 append -> checkpoint -> reopen/index recovery。
 
 任何 Phase 0 代码都不应通过关闭 warning gate 来“修 CI”。
 
@@ -98,7 +99,7 @@ Identity + signing + Event + Genesis + 第一版 append-file storage 仍远低�
 
 ### A3 Persistent storage
 
-**IN PROGRESS**
+**IN PROGRESS — PR #3 baseline merged; hardened candidate CI green**
 
 append-only file + index 候选已经进入实现：
 
@@ -111,8 +112,8 @@ append-only file + index 候选已经进入实现：
 - checksum mismatch hard fail；
 - truncated tail 默认 hard fail；
 - 显式 recovery 只修复 incomplete final frame；
-- persistent storage smoke binary；
-- 独立 size delta report。
+- persistent storage smoke binary，并在 CI 中实际执行；
+- 独立 size delta report：最新同一 build 增量 **27,736 B / 27.1 KiB**。
 
 仍需比较：
 
@@ -382,7 +383,7 @@ fresh-install footprint
 当前最合理的顺序：
 
 ```
-1. finish persistent storage comparison（append-file measurements + SQLite）
+1. persistent storage 10k / 100k / 1M reopen/rebuild benchmark + SQLite 同条件对照
 2. Transport abstraction + Loopback
 3. TCP Direct + Relay fallback
 4. Plugin Runtime comparison
