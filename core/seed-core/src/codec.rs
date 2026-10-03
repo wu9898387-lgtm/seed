@@ -32,6 +32,10 @@ impl Encoder {
         self.bytes.extend_from_slice(&value.to_be_bytes());
     }
 
+    pub(crate) fn u64(&mut self, value: u64) {
+        self.bytes.extend_from_slice(&value.to_be_bytes());
+    }
+
     pub(crate) fn i64(&mut self, value: i64) {
         self.bytes.extend_from_slice(&value.to_be_bytes());
     }
@@ -87,6 +91,10 @@ impl<'a> Decoder<'a> {
         Ok(u32::from_be_bytes(self.fixed()?))
     }
 
+    pub(crate) fn u64(&mut self) -> Result<u64, DecodeError> {
+        Ok(u64::from_be_bytes(self.fixed()?))
+    }
+
     pub(crate) fn i64(&mut self) -> Result<i64, DecodeError> {
         Ok(i64::from_be_bytes(self.fixed()?))
     }
@@ -117,10 +125,11 @@ mod tests {
 
     #[test]
     fn primitive_round_trip() {
-        let mut encoder = Encoder::with_capacity(32);
+        let mut encoder = Encoder::with_capacity(40);
         encoder.u8(7);
         encoder.u16(8);
         encoder.u32(9);
+        encoder.u64(10);
         encoder.i64(-11);
         encoder.bytes(b"seed").unwrap();
 
@@ -130,6 +139,7 @@ mod tests {
         assert_eq!(decoder.u8().unwrap(), 7);
         assert_eq!(decoder.u16().unwrap(), 8);
         assert_eq!(decoder.u32().unwrap(), 9);
+        assert_eq!(decoder.u64().unwrap(), 10);
         assert_eq!(decoder.i64().unwrap(), -11);
         assert_eq!(decoder.bytes().unwrap(), b"seed");
         decoder.finish().unwrap();
