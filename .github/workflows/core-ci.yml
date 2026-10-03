@@ -1,0 +1,22 @@
+name: core-ci
+
+on:
+  push:
+    branches: [main, core-kernel-spike]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check
+        run: cargo check --workspace
+      - name: Test
+        run: cargo test --workspace
+      - name: Release size
+        run: sh tools/size-report.sh
