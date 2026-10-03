@@ -41,11 +41,24 @@ Tree Host path
 
 ## MVP reference path
 
-Phase 0/1 可以先用简单可靠字节流完成协议验证：
+Phase 0/1 使用分阶段 reference path：
 
 - Loopback；
 - TCP direct；
 - TCP relay。
+
+### Loopback abstraction spike
+
+第一步只冻结最小上层边界，不冻结真实网络实现：
+
+- `TransportFrame` 只携带受大小限制的 bytes；
+- `TransportPath` 只暴露 Direct / Relay / TreeHost；
+- 上层接口不包含 IP、port 或 socket handle；
+- `Transport` 提供非阻塞 `try_send / try_recv`；
+- `LoopbackTransport` 使用 bounded queue 验证双向传输与 backpressure；
+- Identity authentication / E2EE 明确位于该 raw transport 之上。
+
+这一层不新增第三方依赖，用于后续 TCP/Relay 与 multi-node tests 复用。
 
 这只是 reference transport，不代表长期网络协议被冻结为 TCP。
 
@@ -80,6 +93,19 @@ Seed 的密码学身份不能直接等同于 transport 自带 TLS 服务器身�
 暂不采用作为最小 Core 起点，主要因为依赖、体积和复杂度成本较大。
 
 ## Validation
+
+Loopback abstraction spike 已验证：
+
+- bounded queue 双向传输与 byte preservation；
+- trait-object adapter erasure；
+- backpressure / disconnected peer；
+- oversized frame rejection；
+- canonical Event wire 穿过 transport 后仍可 decode + signature verify；
+- Linux x86_64 stripped release：`seed-transport-smoke` 404,432 B / 395.0 KiB，
+  相对 core 390,328 B / 381.2 KiB 增量 14,104 B / 13.8 KiB；
+- 无新增第三方依赖，CI fmt/check/clippy/tests/protocol/storage/transport/size 全绿。
+
+后续仍需：
 
 - direct connect；
 - forced direct failure -> relay fallback；

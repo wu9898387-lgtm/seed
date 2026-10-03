@@ -19,6 +19,7 @@ pub mod space;
 #[cfg(feature = "sqlite-storage")]
 pub mod sqlite_storage;
 pub mod storage;
+pub mod transport;
 
 pub const PROTOCOL_VERSION: u16 = 1;
 pub const PLUGIN_API_VERSION: u16 = 1;
