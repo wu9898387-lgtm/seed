@@ -35,6 +35,34 @@ Native in-process 插件如果与 Core 共享完整地址空间，会直接削�
 
 具体 Wasm engine **暂不冻结**。
 
+### Wasmi 2.0 Phase 0 candidate
+
+第一轮可执行候选已经用 `wasmi = 2.0.0` 跑通，并保持为 optional
+`plugin-wasmi` feature，不进入默认 Core。
+
+当前 Host ABI 只链接：
+
+```text
+seed.capability_allowed(i32) -> i32
+seed.state_put(i32, i32) -> i32
+seed.state_get(i32) -> i32
+```
+
+未链接完整 WASI，也没有 filesystem / network / clock / randomness /
+Root private-key host API。
+
+每个插件实例使用独立 Store，当前 reference limits：
+
+- fuel：50,000；
+- linear memory：64 KiB；
+- instance：1；
+- memory：1；
+- table：1；
+- table elements：1,024；
+- memory/table growth failure -> trap。
+
+这只是候选参数，不是最终 Plugin ABI 或资源配额承诺。
+
 Phase 0 至少比较：
 
 - WAMR 或同类小 footprint runtime；
@@ -106,19 +134,49 @@ seed_ui_register(...)
 
 ## Validation
 
-Spike 必须记录：
+### Wasmi candidate 已获得的证据
+
+Linux x86_64 release / stripped，同一 Phase 0 构建口径：
+
+- default `seed-core-smoke`：**390,328 B / 381.2 KiB**；
+- `seed-plugin-wasmi-smoke`：**1,221,640 B / 1,193.0 KiB**；
+- runtime + Host ABI 相对 Core 增量：**831,312 B / 811.8 KiB**；
+- 2 MiB reference target 剩余：**875,512 B**。
+
+CI 已验证：
+
+- format / check / Clippy `-D warnings`；
+- 50 个 unit tests；
+- capability 未声明 -> deny；
+- 声明 `EvaluateCapability(MemberRemove)` -> Host ABI allow；
+- scoped storage 未声明 -> deny；
+- 两个插件 Store 的 scoped state 互不共享；
+- non-terminating guest 被 fuel 中断；
+- 128 KiB initial memory 被 64 KiB Store limit 拒绝；
+- 未链接的 Root private-key import 拒绝；
+- 未链接的 WASI/network-like import 拒绝；
+- malformed Wasm 在执行前拒绝；
+- smoke 中真实调用 capability/state Host ABI 成功。
+
+Wasmi 提供 fuel metering 与 Store-level resource limiter，当前 spike 正在利用这两条机制做 deterministic execution/resource bounding。其 API 证据见实现注释与 Phase 0 测试；engine 仍保持可替换。 
+
+### 仍需记录
+
+Spike 必须继续记录：
 
 - runtime 增加的 stripped binary size；
 - hello plugin 大小；
 - instantiate latency；
 - Host ABI 调用开销；
 - peak RSS；
-- memory limit；
-- infinite loop / trap；
-- OOM；
-- 未授权 filesystem/network access；
-- foreign plugin state access；
-- plugin crash isolation。
+- instantiate latency；
+- Host ABI 调用吞吐；
+- peak RSS；
+- dynamic memory.grow / OOM 边界；
+- excessive host calls；
+- explicit trap 后 Host/Core 状态完整性；
+- plugin package/signing format；
+- 至少一个替代 runtime / out-of-process 模型的同条件对照。
 
 ## Acceptance gate
 
