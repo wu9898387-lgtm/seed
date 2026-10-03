@@ -748,31 +748,28 @@ MVP 发布候选必须满足：
 
 ## 21. 当前实现进度与下一步
 
-截至本轮 persistent-storage follow-up 验证：
+截至当前 Phase-0 主线验证：
 
-- Rust baseline 已完成；
-- Identity / DeviceAuthorization 已完成第一版；
-- signed Event 与 deterministic IDs 已完成；
-- Genesis canonical state machine 已完成；
-- plugin package digest pinning 已完成；
-- Capability DefaultDeny 已存在；
-- deterministic protocol vector 已存在；
-- PR #3 的 std-only FileEventStore baseline 已进入 `main`；
-- 本轮候选进一步加入 bounded canonical Event wire decode/re-encode、schema/payload/body 上限、domain-separated frame checksum、oversized frame pre-allocation rejection、strict truncated-tail handling 与显式 final-tail recovery；
-- CI 现在会真正执行 `seed-storage-smoke`，覆盖落盘、重开和索引恢复；
-- 最新 Linux x86_64 release CI：`seed-core-smoke` = **390,328 B / 381.2 KiB**，`seed-storage-smoke` = **418,064 B / 408.3 KiB**，同一 build 的 persistent-storage path 增量 = **27,736 B / 27.1 KiB**；
-- 当前验证为 31 个 unit tests + 1 个 protocol-vector integration test 全通过，fmt/check/Clippy/storage smoke/size gate 也全部通过；
-- append-file 仍只是 ADR-0005 的候选，不因为体积小就直接 Accepted。
+- Rust baseline、Identity / DeviceAuthorization、signed Event、deterministic IDs、Genesis canonical state machine、plugin package digest pinning 与 Capability DefaultDeny 已有第一版可执行实现；
+- append-file EventStore 已包含 bounded canonical Event wire、schema/payload/body 上限、domain-separated frame checksum、oversized frame pre-allocation rejection、strict truncated-tail handling、显式 final-tail recovery，以及 `SpaceId -> event positions` in-memory index；
+- SQLite comparison adapter 保持 optional feature；system-linked 与 bundled 体积均已自动记录；
+- `seed-storage-compare` 已统一为 append-file / SQLite 都使用 bounded Space-indexed recent-history；共享 CI 只做 256-event correctness smoke，10k / 100k / 1M 性能结论必须来自固定 runner / filesystem 的重复测量；
+- forced process-kill integration test 已合入：worker 在 completed durable append 后保持 store 打开、没有 checkpoint/clean drop，父进程直接 kill；append-file 与 SQLite WAL reopen 后都保留全部已完成 append；
+- 该 process-kill 结果不等价于 mid-write / torn-write / real power-loss，后者仍需 fault-injection；
+- 最新 Linux x86_64 stripped release CI：`seed-core-smoke` = **390,328 B / 381.2 KiB**，`seed-storage-smoke` = **420,880 B / 411.0 KiB**，persistent-storage path 增量 = **30,552 B / 29.8 KiB**；
+- SQLite system-linked smoke = **430,688 B / 420.6 KiB**；bundled smoke = **1,488,112 B / 1,453.2 KiB**；
+- Transport abstraction + bounded Loopback 已进入 `main`；TCP Direct / Relay fallback 仍是当前 active spike；
+- append-file 与 SQLite 都仍只是 ADR-0005 候选，不因为单次 shared-runner timing 或体积更小就直接 Accepted。
 
 下一批优先实现：
 
-1. persistent storage 10k / 100k / 1M reopen/rebuild benchmark + SQLite 同条件对照；
-2. Transport abstraction + Loopback；
-3. TCP Direct + Relay fallback；
+1. fixed-environment storage 10k / 100k / 1M repeated benchmark + mid-write / torn-write / power-loss fault injection；
+2. TCP Direct + Relay fallback；
+3. Identity-authenticated secure session / KEX / E2EE，并验证 Relay 只能看到 ciphertext envelope；
 4. Plugin Runtime / Wasm engine size + sandbox comparison；
 5. Governance Allow / Deny / Pending 纵向切片；
 6. Device revocation / key lifecycle；
 7. Multi-node smoke framework；
 8. Tree Host。
 
-项目现在已经从“产品理念”进入“可执行工程 Spike”，并开始用可重复 CI 数据收敛协议和依赖选择；尚未进入面向用户的 MVP 功能堆叠阶段。
+项目现在已经从“产品理念”进入“可执行工程 Spike”，并开始用可重复 CI、故障恢复测试和 release-size 数据收敛协议与依赖选择；尚未进入面向用户的 MVP 功能堆叠阶段。
