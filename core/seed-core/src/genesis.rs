@@ -123,7 +123,7 @@ impl GenesisDraft {
 
         let unsigned = self
             .canonical_unsigned_bytes()
-            .map_err(GenesisBuildError::Encode)?;
+            .map_err(|_| GenesisBuildError::Encoding)?;
         let signature_input = domain_wrap(GENESIS_SIGNATURE_DOMAIN, &unsigned);
         let signature = device.sign(&signature_input);
 
@@ -162,25 +162,25 @@ impl GenesisDraft {
 
         let mut decoder = Decoder::new(bytes);
 
-        let schema_version = decoder.u16().map_err(GenesisDecodeError::Codec)?;
+        let schema_version = decoder.u16().map_err(map_decode_error)?;
         if schema_version != GENESIS_SCHEMA_VERSION {
             return Err(GenesisDecodeError::UnsupportedSchemaVersion);
         }
 
-        let protocol_version = decoder.u16().map_err(GenesisDecodeError::Codec)?;
+        let protocol_version = decoder.u16().map_err(map_decode_error)?;
         if protocol_version != PROTOCOL_VERSION {
             return Err(GenesisDecodeError::UnsupportedProtocolVersion);
         }
 
-        let kind = SpaceKind::from_wire(decoder.u8().map_err(GenesisDecodeError::Codec)?)
+        let kind = SpaceKind::from_wire(decoder.u8().map_err(map_decode_error)?)
             .ok_or(GenesisDecodeError::InvalidSpaceKind)?;
 
-        let creator = IdentityId::from_bytes(decoder.fixed().map_err(GenesisDecodeError::Codec)?);
+        let creator = IdentityId::from_bytes(decoder.fixed().map_err(map_decode_error)?);
         let creator_device =
-            DeviceId::from_bytes(decoder.fixed().map_err(GenesisDecodeError::Codec)?);
-        let created_at_ms = decoder.i64().map_err(GenesisDecodeError::Codec)?;
+            DeviceId::from_bytes(decoder.fixed().map_err(map_decode_error)?);
+        let created_at_ms = decoder.i64().map_err(map_decode_error)?;
 
-        let plugin_count = decoder.u16().map_err(GenesisDecodeError::Codec)? as usize;
+        let plugin_count = decoder.u16().map_err(map_decode_error)? as usize;
         if plugin_count > MAX_GENESIS_PLUGINS {
             return Err(GenesisDecodeError::TooManyPlugins);
         }
@@ -189,7 +189,7 @@ impl GenesisDraft {
         let mut previous_id: Option<PluginId> = None;
 
         for _ in 0..plugin_count {
-            let id = PluginId::from_bytes(decoder.fixed().map_err(GenesisDecodeError::Codec)?);
+            let id = PluginId::from_bytes(decoder.fixed().map_err(map_decode_error)?);
 
             if let Some(previous) = previous_id {
                 if id == previous {
@@ -202,13 +202,13 @@ impl GenesisDraft {
             previous_id = Some(id);
 
             let version = PluginVersion {
-                major: decoder.u16().map_err(GenesisDecodeError::Codec)?,
-                minor: decoder.u16().map_err(GenesisDecodeError::Codec)?,
-                patch: decoder.u16().map_err(GenesisDecodeError::Codec)?,
+                major: decoder.u16().map_err(map_decode_error)?,
+                minor: decoder.u16().map_err(map_decode_error)?,
+                patch: decoder.u16().map_err(map_decode_error)?,
             };
             let package_digest =
-                PluginDigest::from_bytes(decoder.fixed().map_err(GenesisDecodeError::Codec)?);
-            let config = decoder.bytes().map_err(GenesisDecodeError::Codec)?;
+                PluginDigest::from_bytes(decoder.fixed().map_err(map_decode_error)?);
+            let config = decoder.bytes().map_err(map_decode_error)?;
             if config.len() > MAX_PLUGIN_CONFIG_BYTES {
                 return Err(GenesisDecodeError::PluginConfigTooLarge);
             }
@@ -221,7 +221,7 @@ impl GenesisDraft {
             });
         }
 
-        decoder.finish().map_err(GenesisDecodeError::Codec)?;
+        decoder.finish().map_err(map_decode_error)?;
 
         Ok(Self {
             kind,
@@ -304,7 +304,7 @@ impl GenesisRecord {
         let unsigned = self
             .draft
             .canonical_unsigned_bytes()
-            .map_err(GenesisEncodeError::Codec)?;
+            .map_err(map_encode_error)?;
 
         if unsigned.len() > MAX_GENESIS_BODY_BYTES {
             return Err(GenesisEncodeError::BodyTooLarge);
@@ -315,30 +315,30 @@ impl GenesisRecord {
         encoder.u16(GENESIS_WIRE_VERSION);
         encoder
             .bytes(&unsigned)
-            .map_err(GenesisEncodeError::Codec)?;
+            .map_err(map_encode_error)?;
         encoder.fixed(self.signature.as_bytes());
         Ok(encoder.finish())
     }
 
     pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, GenesisDecodeError> {
         let mut decoder = Decoder::new(bytes);
-        let magic: [u8; 4] = decoder.fixed().map_err(GenesisDecodeError::Codec)?;
+        let magic: [u8; 4] = decoder.fixed().map_err(map_decode_error)?;
         if &magic != GENESIS_WIRE_MAGIC {
             return Err(GenesisDecodeError::InvalidMagic);
         }
 
-        let wire_version = decoder.u16().map_err(GenesisDecodeError::Codec)?;
+        let wire_version = decoder.u16().map_err(map_decode_error)?;
         if wire_version != GENESIS_WIRE_VERSION {
             return Err(GenesisDecodeError::UnsupportedWireVersion);
         }
 
-        let unsigned = decoder.bytes().map_err(GenesisDecodeError::Codec)?;
+        let unsigned = decoder.bytes().map_err(map_decode_error)?;
         if unsigned.len() > MAX_GENESIS_BODY_BYTES {
             return Err(GenesisDecodeError::BodyTooLarge);
         }
 
-        let signature = Signature::from_bytes(decoder.fixed().map_err(GenesisDecodeError::Codec)?);
-        decoder.finish().map_err(GenesisDecodeError::Codec)?;
+        let signature = Signature::from_bytes(decoder.fixed().map_err(map_decode_error)?);
+        decoder.finish().map_err(map_decode_error)?;
 
         let draft = GenesisDraft::decode_unsigned(unsigned)?;
         let record = Self::from_parts(draft, signature);
@@ -369,7 +369,7 @@ impl GenesisRecord {
         let unsigned = self
             .draft
             .canonical_unsigned_bytes()
-            .map_err(GenesisVerifyError::Encode)?;
+            .map_err(|_| GenesisVerifyError::Encoding)?;
 
         let expected_id = GenesisId::from_bytes(hash32(
             GENESIS_ID_DOMAIN,
@@ -397,7 +397,7 @@ impl GenesisRecord {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GenesisBuildError {
     Identity(IdentityError),
-    Encode(EncodeError),
+    Encoding,
     ActorMismatch,
     DuplicatePlugin,
     TooManyPlugins,
@@ -406,13 +406,14 @@ pub enum GenesisBuildError {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GenesisEncodeError {
-    Codec(EncodeError),
+    FieldTooLarge,
     BodyTooLarge,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GenesisDecodeError {
-    Codec(DecodeError),
+    UnexpectedEof,
+    TrailingBytes,
     InvalidMagic,
     UnsupportedWireVersion,
     UnsupportedSchemaVersion,
@@ -429,11 +430,24 @@ pub enum GenesisDecodeError {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GenesisVerifyError {
     Identity(IdentityError),
-    Encode(EncodeError),
+    Encoding,
     ActorMismatch,
     IdMismatch,
     SpaceIdMismatch,
     Crypto(CryptoError),
+}
+
+fn map_encode_error(error: EncodeError) -> GenesisEncodeError {
+    match error {
+        EncodeError::FieldTooLarge => GenesisEncodeError::FieldTooLarge,
+    }
+}
+
+fn map_decode_error(error: DecodeError) -> GenesisDecodeError {
+    match error {
+        DecodeError::UnexpectedEof => GenesisDecodeError::UnexpectedEof,
+        DecodeError::TrailingBytes => GenesisDecodeError::TrailingBytes,
+    }
 }
 
 fn domain_wrap(domain: &[u8], bytes: &[u8]) -> Vec<u8> {
