@@ -99,7 +99,23 @@ the same stripped/LTO release smoke measured:
   release-size gate all passed.
 
 This first persistent-storage implementation adds no new third-party dependency.
-Transport and plugin runtime now remain the largest unresolved Core size risks.
+
+## Raw TCP transport measurement
+
+After adding the FrameTransport abstraction and std::net TcpFrameTransport, and
+forcing a canonical Event through an actual localhost TCP send/receive path in
+the release smoke:
+
+- smoke binary: **426,456 bytes (416.5 KiB)**;
+- delta from the persistent-storage build: **10,808 bytes (about 10.6 KiB)**;
+- total delta from the dependency-free baseline: **143,808 bytes (about 140.4 KiB)**;
+- tests: **31 unit tests + 1 protocol-vector integration test passed**;
+- rustfmt, cargo check, Clippy with warnings denied, vector smoke, tests, and
+  release-size gate all passed.
+
+This TCP layer is intentionally raw framing, not an authenticated secure session.
+The secure-session and plugin-runtime spikes remain the major unresolved Core
+architecture and size risks.
 
 ## Consequences
 
