@@ -58,7 +58,7 @@ fn exercise_sqlite() -> rusqlite::Result<()> {
 
     let _ = std::fs::remove_file(format!("{}-wal", path.display()));
     let _ = std::fs::remove_file(format!("{}-shm", path.display()));
-    std::fs::remove_file(&path).map_err(|_| rusqlite::Error::InvalidQuery)?;
+    let _ = std::fs::remove_file(&path);
     Ok(())
 }
 
