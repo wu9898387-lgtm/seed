@@ -1,8 +1,4 @@
-use std::{
-    collections::HashSet,
-    path::Path,
-    time::Duration,
-};
+use std::{collections::HashSet, path::Path, time::Duration};
 
 use rusqlite::{params, Connection};
 
@@ -106,9 +102,7 @@ impl SqliteEventStore {
         Ok(events)
     }
 
-    fn load_cache(
-        connection: &Connection,
-    ) -> Result<(HashSet<EventId>, Vec<Event>), StorageError> {
+    fn load_cache(connection: &Connection) -> Result<(HashSet<EventId>, Vec<Event>), StorageError> {
         let mut statement = connection.prepare(
             "SELECT ordinal, event_id, space_id, event_bytes
              FROM events
@@ -232,10 +226,7 @@ fn decode_row(
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs,
-        path::PathBuf,
-    };
+    use std::{fs, path::PathBuf};
 
     use crate::{
         event::{Event, EventHeader},
@@ -344,7 +335,10 @@ mod tests {
         {
             let connection = Connection::open(&path).unwrap();
             connection
-                .execute("UPDATE events SET event_bytes = x'00' WHERE ordinal = 1", [])
+                .execute(
+                    "UPDATE events SET event_bytes = x'00' WHERE ordinal = 1",
+                    [],
+                )
                 .unwrap();
         }
 
@@ -362,7 +356,9 @@ mod tests {
 
         {
             let connection = Connection::open(&path).unwrap();
-            connection.execute_batch("PRAGMA user_version = 99;").unwrap();
+            connection
+                .execute_batch("PRAGMA user_version = 99;")
+                .unwrap();
         }
 
         assert!(matches!(
