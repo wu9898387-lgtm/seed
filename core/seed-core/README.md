@@ -12,10 +12,12 @@ Current scope:
 - Root -> Device authorization records;
 - strict Ed25519 signature verification;
 - domain-separated SHA-256 Identity / Device / Genesis / Space / Event IDs;
-- deterministic signed Event envelope;
+- deterministic signed Event envelope with canonical SEVT wire encoding;
 - canonical signed Genesis records;
 - plugin package digest pinning inside Genesis;
-- append-only in-memory Event Store with duplicate suppression.
+- append-only in-memory Event Store with duplicate suppression;
+- durable append-only FileEventStore with restart replay, record checksums, and
+  fail-closed corruption/truncation detection.
 
 Genesis rules in the current spike:
 
@@ -43,7 +45,8 @@ Not implemented yet:
 
 - persistent/OS-backed key storage;
 - device revocation and key rotation;
-- persistent event storage;
+- scalable/indexed production event database;
+- automatic repair/salvage of a truncated event-log tail;
 - networking and secure sessions;
 - plugin sandbox/runtime;
 - governance execution;
