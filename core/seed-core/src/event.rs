@@ -66,8 +66,8 @@ impl Event {
             return Err(EventBuildError::ActorMismatch);
         }
 
-        let unsigned = canonical_unsigned_bytes(&header, &payload)
-            .map_err(EventBuildError::Encode)?;
+        let unsigned =
+            canonical_unsigned_bytes(&header, &payload).map_err(EventBuildError::Encode)?;
         let signature_input = domain_wrap(EVENT_SIGNATURE_DOMAIN, &unsigned);
         let signature = device.sign(&signature_input);
         let id = derive_event_id(&unsigned, &signature);
@@ -112,9 +112,7 @@ impl Event {
             .verify_against(identity)
             .map_err(EventVerifyError::Identity)?;
 
-        if self.header.author != identity.id()
-            || self.header.device != authorization.device_id()
-        {
+        if self.header.author != identity.id() || self.header.device != authorization.device_id() {
             return Err(EventVerifyError::ActorMismatch);
         }
 
@@ -136,10 +134,7 @@ impl Event {
     }
 }
 
-fn canonical_unsigned_bytes(
-    header: &EventHeader,
-    payload: &[u8],
-) -> Result<Vec<u8>, EncodeError> {
+fn canonical_unsigned_bytes(header: &EventHeader, payload: &[u8]) -> Result<Vec<u8>, EncodeError> {
     let mut out = Vec::with_capacity(160 + header.schema.len() + payload.len());
     out.extend_from_slice(&header.protocol_version.to_be_bytes());
     out.extend_from_slice(header.space.as_bytes());
@@ -153,10 +148,7 @@ fn canonical_unsigned_bytes(
 }
 
 fn derive_event_id(unsigned: &[u8], signature: &Signature) -> EventId {
-    EventId::from_bytes(hash32(
-        EVENT_ID_DOMAIN,
-        &[unsigned, signature.as_bytes()],
-    ))
+    EventId::from_bytes(hash32(EVENT_ID_DOMAIN, &[unsigned, signature.as_bytes()]))
 }
 
 fn domain_wrap(domain: &[u8], bytes: &[u8]) -> Vec<u8> {
