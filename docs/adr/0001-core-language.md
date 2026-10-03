@@ -54,6 +54,23 @@ This is evidence that the signing identity layer is currently compatible with
 Seed's 2 MB Core budget. It is not evidence yet for storage, transport, or the
 plugin runtime, which remain the largest unknowns.
 
+## Genesis / canonical encoding measurement
+
+After adding the canonical Genesis state machine and forcing its encode, decode,
+signature verification, plugin digest pinning, GenesisId derivation, and SpaceId
+derivation into the release smoke path:
+
+- smoke binary: **389,816 bytes (380.7 KiB)**;
+- delta from the signing/identity measurement: **13,496 bytes (about 13.2 KiB)**;
+- total delta from the dependency-free baseline: **107,168 bytes (about 104.7 KiB)**;
+- tests: **21 unit tests + 1 protocol-vector integration test passed**;
+- format, cargo check, Clippy with warnings denied, vector smoke, and release-size
+  gate all passed.
+
+At this point Identity + Device authorization + Event signing + canonical Genesis
+still occupy well under one quarter of the 2 MB target. Persistent storage,
+transport, and plugin runtime remain the meaningful size-risk areas.
+
 ## Consequences
 
 Positive:
