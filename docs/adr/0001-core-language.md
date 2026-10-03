@@ -34,8 +34,25 @@ GitHub Actions baseline on 2026-10-03:
 - smoke binary: **282,648 bytes (276.0 KiB)**;
 - unit tests: **6 passed, 0 failed**.
 
-This number is only a lower-bound baseline. It does not yet include a production
-crypto backend, persistent storage, transport, or plugin runtime.
+This number is the dependency-free lower-bound baseline. Persistent storage,
+transport, and plugin runtime are still excluded.
+
+## Phase-1 signing measurement
+
+The same CI profile after adding the production signature path measured:
+
+- Ed25519 signing and strict verification through ed25519-dalek 3.0.0;
+- SHA-256 Identity / Device / Event IDs;
+- OS entropy and secure temporary-secret zeroization;
+- Root -> Device authorization and Device-signed Event verification;
+- smoke binary: **376,320 bytes (367.5 KiB)**;
+- delta from the dependency-free baseline: **93,672 bytes (about 91.5 KiB)**;
+- tests: **13 unit tests + 1 protocol-vector integration test passed**;
+- format, cargo check, Clippy with warnings denied, and tests all passed.
+
+This is evidence that the signing identity layer is currently compatible with
+Seed's 2 MB Core budget. It is not evidence yet for storage, transport, or the
+plugin runtime, which remain the largest unknowns.
 
 ## Consequences
 
