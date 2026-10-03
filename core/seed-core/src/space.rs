@@ -1,6 +1,6 @@
 /// Stable identifier for a communication space.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct SpaceId([u8; Self::LEN]);
+pub struct SpaceId([u8; 32]);
 
 impl SpaceId {
     pub const LEN: usize = 32;
