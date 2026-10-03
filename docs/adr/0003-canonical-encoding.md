@@ -37,7 +37,7 @@ Current rules:
 10. Every signed object has explicit schema/wire versioning and domain-separated
     signature/hash namespaces.
 
-Genesis v1 additionally pins each plugin by:
+Genesis schema/wire v2 additionally carries a 128-bit creation nonce and pins each plugin by:
 
 - PluginId;
 - semantic version;
@@ -77,6 +77,10 @@ GenesisRecord -> derive GenesisId -> derive SpaceId.
 
 The creator field records who signed the initial state. It does not grant an
 Owner/Admin role in Core.
+
+The creation nonce is covered by the canonical signed bytes. Two otherwise
+identical creations can therefore produce distinct GenesisId / SpaceId values
+without depending on clock uniqueness.
 
 After activation, changes to governance or plugins must be expressed through
 new authorized events. Replacing the Genesis bytes is not a state transition.

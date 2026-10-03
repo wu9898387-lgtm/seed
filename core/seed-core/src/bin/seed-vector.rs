@@ -27,6 +27,7 @@ fn main() {
         root.document(),
         &device,
         1_700_000_000_100,
+        [3u8; 16],
     );
     draft
         .add_plugin(

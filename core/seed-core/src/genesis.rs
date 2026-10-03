@@ -8,8 +8,9 @@ use crate::{
     PROTOCOL_VERSION,
 };
 
-const GENESIS_SCHEMA_VERSION: u16 = 1;
-const GENESIS_WIRE_VERSION: u16 = 1;
+const GENESIS_SCHEMA_VERSION: u16 = 2;
+const GENESIS_WIRE_VERSION: u16 = 2;
+const GENESIS_NONCE_LENGTH: usize = 16;
 const GENESIS_WIRE_MAGIC: &[u8; 4] = b"SGEN";
 
 const GENESIS_SIGNATURE_DOMAIN: &[u8] = b"seed:genesis-signature:v1\0";
@@ -70,6 +71,7 @@ pub struct GenesisDraft {
     creator: IdentityId,
     creator_device: DeviceId,
     created_at_ms: i64,
+    creation_nonce: [u8; GENESIS_NONCE_LENGTH],
     plugins: Vec<GenesisPlugin>,
 }
 
@@ -79,12 +81,14 @@ impl GenesisDraft {
         creator: &IdentityDocument,
         device: &DeviceIdentity,
         created_at_ms: i64,
+        creation_nonce: [u8; GENESIS_NONCE_LENGTH],
     ) -> Self {
         Self {
             kind,
             creator: creator.id(),
             creator_device: device.id(),
             created_at_ms,
+            creation_nonce,
             plugins: Vec::new(),
         }
     }
@@ -138,6 +142,7 @@ impl GenesisDraft {
         encoder.fixed(self.creator.as_bytes());
         encoder.fixed(self.creator_device.as_bytes());
         encoder.i64(self.created_at_ms);
+        encoder.fixed(&self.creation_nonce);
 
         let plugin_count =
             u16::try_from(self.plugins.len()).map_err(|_| EncodeError::FieldTooLarge)?;
@@ -178,6 +183,7 @@ impl GenesisDraft {
         let creator = IdentityId::from_bytes(decoder.fixed().map_err(map_decode_error)?);
         let creator_device = DeviceId::from_bytes(decoder.fixed().map_err(map_decode_error)?);
         let created_at_ms = decoder.i64().map_err(map_decode_error)?;
+        let creation_nonce = decoder.fixed().map_err(map_decode_error)?;
 
         let plugin_count = decoder.u16().map_err(map_decode_error)? as usize;
         if plugin_count > MAX_GENESIS_PLUGINS {
@@ -227,6 +233,7 @@ impl GenesisDraft {
             creator,
             creator_device,
             created_at_ms,
+            creation_nonce,
             plugins,
         })
     }
@@ -281,6 +288,10 @@ impl GenesisRecord {
 
     pub const fn created_at_ms(&self) -> i64 {
         self.draft.created_at_ms
+    }
+
+    pub const fn creation_nonce(&self) -> [u8; GENESIS_NONCE_LENGTH] {
+        self.draft.creation_nonce
     }
 
     pub fn plugins(&self) -> &[GenesisPlugin] {
@@ -479,7 +490,7 @@ mod tests {
         let device = DeviceIdentity::generate().unwrap();
         let authorization = root.authorize_device(&device, 1, 10);
 
-        let mut draft = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 11);
+        let mut draft = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 11, [3; 16]);
         draft.add_plugin(plugin(2, b"two")).unwrap();
         draft.add_plugin(plugin(1, b"one")).unwrap();
 
@@ -500,11 +511,11 @@ mod tests {
         let device = DeviceIdentity::from_secret_bytes([2; 32]);
         let authorization = root.authorize_device(&device, 1, 10);
 
-        let mut a = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 11);
+        let mut a = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 11, [3; 16]);
         a.add_plugin(plugin(2, b"two")).unwrap();
         a.add_plugin(plugin(1, b"one")).unwrap();
 
-        let mut b = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 11);
+        let mut b = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 11, [3; 16]);
         b.add_plugin(plugin(1, b"one")).unwrap();
         b.add_plugin(plugin(2, b"two")).unwrap();
 
@@ -524,7 +535,7 @@ mod tests {
     fn duplicate_plugin_is_rejected() {
         let root = RootIdentity::generate().unwrap();
         let device = DeviceIdentity::generate().unwrap();
-        let mut draft = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 11);
+        let mut draft = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 11, [3; 16]);
 
         draft.add_plugin(plugin(1, b"one")).unwrap();
         assert_eq!(
@@ -538,7 +549,7 @@ mod tests {
         let root = RootIdentity::generate().unwrap();
         let device = DeviceIdentity::generate().unwrap();
         let authorization = root.authorize_device(&device, 1, 10);
-        let record = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 11)
+        let record = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 11, [3; 16])
             .activate(root.document(), &authorization, &device)
             .unwrap();
 
@@ -557,7 +568,7 @@ mod tests {
         let device = DeviceIdentity::generate().unwrap();
         let authorization = root.authorize_device(&device, 1, 10);
 
-        let mut draft = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 11);
+        let mut draft = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 11, [3; 16]);
         draft.add_plugin(plugin(1, b"one")).unwrap();
         let record = draft
             .activate(root.document(), &authorization, &device)
@@ -578,11 +589,40 @@ mod tests {
     }
 
     #[test]
+    fn creation_nonce_changes_space_identity() {
+        let root = RootIdentity::from_secret_bytes([1; 32]);
+        let device = DeviceIdentity::from_secret_bytes([2; 32]);
+        let authorization = root.authorize_device(&device, 1, 10);
+
+        let a = GenesisDraft::new(
+            SpaceKind::Group,
+            root.document(),
+            &device,
+            11,
+            [3; 16],
+        )
+        .activate(root.document(), &authorization, &device)
+        .unwrap();
+        let b = GenesisDraft::new(
+            SpaceKind::Group,
+            root.document(),
+            &device,
+            11,
+            [4; 16],
+        )
+        .activate(root.document(), &authorization, &device)
+        .unwrap();
+
+        assert_ne!(a.id(), b.id());
+        assert_ne!(a.space_id(), b.space_id());
+    }
+
+    #[test]
     fn creator_is_provenance_not_owner_state() {
         let root = RootIdentity::generate().unwrap();
         let device = DeviceIdentity::generate().unwrap();
         let authorization = root.authorize_device(&device, 1, 10);
-        let record = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 11)
+        let record = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 11, [3; 16])
             .activate(root.document(), &authorization, &device)
             .unwrap();
 

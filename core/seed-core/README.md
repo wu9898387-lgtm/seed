@@ -23,6 +23,8 @@ Genesis rules in the current spike:
 - plugin order does not affect canonical bytes or GenesisId;
 - duplicate PluginId entries are rejected;
 - plugin package bytes are represented by a pinned digest;
+- every Genesis includes an explicit 128-bit creation nonce;
+- Space identity does not depend on wall-clock uniqueness;
 - the activated Genesis record is immutable through the public API;
 - SpaceId is derived from GenesisId;
 - creator identity is provenance only and does not imply Owner/Admin authority;

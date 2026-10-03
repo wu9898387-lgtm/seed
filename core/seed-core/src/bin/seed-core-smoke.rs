@@ -13,7 +13,7 @@ fn main() {
     let device = DeviceIdentity::generate().expect("device identity");
     let authorization = root.authorize_device(&device, 1, 0);
 
-    let mut draft = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 1);
+    let mut draft = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 1, [9; 16]);
     draft
         .add_plugin(
             GenesisPlugin::new(
