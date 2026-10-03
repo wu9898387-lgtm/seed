@@ -11,13 +11,13 @@ ADR 用于记录 Seed 的重大技术与协议决策。
 
 ## 当前编号
 
-ADR-0001 ~ ADR-0003 当前由 `core-kernel-spike` / PR #1 提供实测版本。它们在 PR 合并后进入 main：
+ADR-0001 ~ ADR-0003 已随 PR #1 合并到 `main`：
 
 | ADR | 主题 | 当前状态 |
 |---|---|---|
-| 0001 | Core language spike uses Rust | Provisional / PR #1 |
-| 0002 | Root and Device signing keys | Provisional / PR #1 |
-| 0003 | Narrow canonical binary encoding for signed kernel records | Provisional / PR #1 |
+| [0001](0001-core-language.md) | Core language spike uses Rust | Provisional |
+| [0002](0002-identity-keys.md) | Root and Device signing keys | Provisional |
+| [0003](0003-canonical-encoding.md) | Narrow canonical binary encoding for signed kernel records | Provisional |
 | [0004](0004-plugin-runtime.md) | Wasm + Seed Host ABI | Proposed |
 | [0005](0005-storage-model.md) | Validated Event Log + Materialized View | Proposed |
 | [0006](0006-transport.md) | Direct-first + Relay fallback | Proposed |
