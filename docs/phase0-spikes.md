@@ -99,7 +99,7 @@ Identity + signing + Event + Genesis + 第一版 append-file storage 仍远低�
 
 ### A3 Persistent storage
 
-**IN PROGRESS — PR #3 baseline merged; hardened candidate CI green**
+**IN PROGRESS — append-file baseline merged; SQLite comparison adapter CI green**
 
 append-only file + index 候选已经进入实现：
 
@@ -115,10 +115,12 @@ append-only file + index 候选已经进入实现：
 - persistent storage smoke binary，并在 CI 中实际执行；
 - 独立 size delta report：最新同一 build 增量 **27,736 B / 27.1 KiB**。
 
-仍需比较：
+已完成第一轮 SQLite 对照：
 
-- SQLite adapter；
-- append-only file + index。
+- system-linked：430,656 B / 420.6 KiB（较 core +40,328 B / 39.4 KiB）；
+- bundled：1,488,048 B / 1,453.2 KiB（较 core +1,097,720 B / 1,072.0 KiB）；
+- reopen / duplicate suppression / corrupted row rejection / Space recent-history index smoke 通过；
+- SQLite 保持 optional feature，不进入默认 Core。
 
 仍需记录：
 
@@ -128,7 +130,7 @@ append-only file + index 候选已经进入实现：
 - file/db size；
 - recent-history query；
 - 10k / 100k event rebuild；
-- SQLite 同条件数据。
+- append-file / SQLite 10k、100k 同条件数据与 crash/power-loss 对照。
 
 在这些数据完成前，不把 append-file 标记为 Accepted。
 
@@ -242,7 +244,7 @@ on_load -> success
 
 ## 7. Spike E — Transport
 
-**TODO**
+**IN PROGRESS — Loopback abstraction PR #6 CI green**
 
 先建立统一 abstraction，再实现：
 
@@ -367,8 +369,9 @@ fresh-install footprint
 - [ ] canonical decoder fuzzing
 - [ ] independent/cross-language vector
 - [x] append-file persistent Event Store candidate
-- [ ] persistent storage comparison
-- [ ] Transport adapters
+- [ ] persistent storage scale/crash comparison
+- [x] Loopback Transport abstraction
+- [ ] TCP / Relay Transport adapters
 - [ ] Relay fallback
 - [ ] Plugin Runtime comparison
 - [ ] Plugin sandbox escape tests
