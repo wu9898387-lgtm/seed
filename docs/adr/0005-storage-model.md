@@ -108,12 +108,16 @@ Event wire 语义下比较，而不是引入第二套协议格式。
 同一 Linux x86_64 stripped release CI：
 
 - core：390,328 B / 381.2 KiB；
-- append-file：418,064 B / 408.3 KiB，较 core +27,736 B / 27.1 KiB；
+- append-file + Space index：420,880 B / 411.0 KiB，较 core +30,552 B / 29.8 KiB；
 - SQLite system-linked：430,656 B / 420.6 KiB，较 core +40,328 B / 39.4 KiB；
 - SQLite bundled：1,488,048 B / 1,453.2 KiB，较 core +1,097,720 B / 1,072.0 KiB。
 
 因此 bundled SQLite 不适合作为 Seed 极小默认 Core 的基线；system-linked SQLite
 仍然是有竞争力的可选 backend，需要继续用 scale/query/crash/platform 数据比较。
+为避免 recent-history 对照天然偏向 SQLite，append-file candidate 也需要维护按 Space
+定位 Event 的内存索引。Phase-0 comparison harness 以相同 signed Event 集分别写入两个
+backend，并记录 append、reopen/rebuild、recent-history query 与数据文件体积。共享 CI
+只验证 harness 可运行；backend 决策所用 10k / 100k / 1M 结果必须来自固定环境的重复测量。
 
 ## MVP backend
 
@@ -198,7 +202,7 @@ append-file 候选已经覆盖/正在覆盖：
 - truncated tail strict rejection；
 - explicit final-tail recovery；
 - release binary size delta：`seed-core-smoke` 390,328 B / 381.2 KiB，
-  `seed-storage-smoke` 418,064 B / 408.3 KiB，delta 27,736 B / 27.1 KiB；
+  `seed-storage-smoke` 420,880 B / 411.0 KiB，delta 30,552 B / 29.8 KiB；
 - CI full gate（fmt/check/clippy/tests/protocol smoke/storage smoke/size）通过。
 
 仍需：

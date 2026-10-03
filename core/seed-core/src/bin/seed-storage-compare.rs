@@ -1,205 +1,196 @@
 use std::{
-    env, fs,
+    fs,
+    hint::black_box,
     path::{Path, PathBuf},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use seed_core::{
     event::{Event, EventHeader},
     id::SpaceId,
-    identity::{DeviceAuthorization, DeviceIdentity, RootIdentity},
+    identity::{DeviceIdentity, RootIdentity},
     sqlite_storage::SqliteEventStore,
     storage::{EventStore, FileEventStore},
     PROTOCOL_VERSION,
 };
 
-const TARGET_SPACE: u8 = 9;
+const SPACE_COUNT: usize = 16;
 const RECENT_LIMIT: usize = 64;
 
-fn main() {
-    let counts = benchmark_counts();
+#[derive(Clone, Copy)]
+struct Measurement {
+    append: Duration,
+    reopen: Duration,
+    recent_query: Duration,
+    bytes: u64,
+    recent_count: usize,
+}
 
+fn main() {
+    let count = std::env::args()
+        .nth(1)
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .expect("event count must be an integer")
+        })
+        .unwrap_or(256);
+    assert!(count > 0, "event count must be greater than zero");
+
+    let events = build_events(count);
+    let target_space = SpaceId::from_bytes([0; 32]);
+
+    let file_path = temp_path("eventlog", count);
+    let sqlite_path = temp_path("sqlite3", count);
+    cleanup_file(&file_path);
+    cleanup_sqlite(&sqlite_path);
+
+    let file = measure_file_store(&file_path, &events, &target_space);
+    let sqlite = measure_sqlite_store(&sqlite_path, &events, &target_space);
+
+    println!(
+        "seed-storage-compare protocol={} events={} spaces={} recent_limit={}",
+        PROTOCOL_VERSION, count, SPACE_COUNT, RECENT_LIMIT
+    );
+    print_measurement("append-file", file, count);
+    print_measurement("sqlite-full", sqlite, count);
+
+    cleanup_file(&file_path);
+    cleanup_sqlite(&sqlite_path);
+}
+
+fn build_events(count: usize) -> Vec<Event> {
     let root = RootIdentity::generate().expect("root identity");
     let device = DeviceIdentity::generate().expect("device identity");
     let authorization = root.authorize_device(&device, 1, 0);
 
-    println!(
-        "storage-bench contract=v1 protocol={} recent_limit={} counts={:?}",
-        PROTOCOL_VERSION, RECENT_LIMIT, counts
-    );
-
-    for count in counts {
-        let generation_started = Instant::now();
-        let events = build_events(count, &root, &device, &authorization);
-        let generation_ms = generation_started.elapsed().as_millis();
-        println!(
-            "storage-bench generated count={} generation_ms={}",
-            count, generation_ms
-        );
-
-        run_file_backend(count, &events);
-        run_sqlite_backend(count, &events);
-    }
-}
-
-fn benchmark_counts() -> Vec<usize> {
-    let raw = env::var("SEED_STORAGE_BENCH_COUNTS").unwrap_or_else(|_| "10000".to_owned());
-    let counts: Vec<_> = raw
-        .split(',')
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(|value| {
-            value
-                .parse::<usize>()
-                .expect("SEED_STORAGE_BENCH_COUNTS must be comma-separated positive integers")
-        })
-        .filter(|count| *count > 0)
-        .collect();
-
-    assert!(
-        !counts.is_empty(),
-        "SEED_STORAGE_BENCH_COUNTS must contain at least one positive integer"
-    );
-    counts
-}
-
-fn build_events(
-    count: usize,
-    root: &RootIdentity,
-    device: &DeviceIdentity,
-    authorization: &DeviceAuthorization,
-) -> Vec<Event> {
     (0..count)
         .map(|index| {
-            let sequence = u64::try_from(index + 1).expect("benchmark count fits u64");
-            let space_byte = if index % 4 == 0 {
-                TARGET_SPACE
-            } else {
-                u8::try_from((index % 3) + 1).expect("space byte")
-            };
-
+            let space = (index % SPACE_COUNT) as u8;
+            let sequence = u64::try_from(index + 1).expect("sequence fits u64");
             Event::sign(
                 root.document(),
-                authorization,
-                device,
+                &authorization,
+                &device,
                 EventHeader {
                     protocol_version: PROTOCOL_VERSION,
-                    space: SpaceId::from_bytes([space_byte; 32]),
+                    space: SpaceId::from_bytes([space; 32]),
                     author: root.document().id(),
                     device: device.id(),
                     sequence,
-                    timestamp_ms: i64::try_from(sequence).expect("sequence fits i64"),
-                    schema: "seed.storage.bench/v1".to_owned(),
+                    timestamp_ms: i64::try_from(sequence).expect("timestamp fits i64"),
+                    schema: "seed.storage.compare/v1".to_owned(),
                 },
-                vec![u8::try_from(index % 251).expect("payload byte"); 32],
+                sequence.to_be_bytes().to_vec(),
             )
-            .expect("signed benchmark event")
+            .expect("sign comparison event")
         })
         .collect()
 }
 
-fn run_file_backend(count: usize, events: &[Event]) {
-    let path = temp_path("append-file", count, "eventlog");
-    let _ = fs::remove_file(&path);
-
-    let mut store = FileEventStore::open(&path).expect("open append-file store");
+fn measure_file_store(path: &Path, events: &[Event], space: &SpaceId) -> Measurement {
     let append_started = Instant::now();
-    for event in events {
-        store.append(event.clone()).expect("append file event");
+    {
+        let mut store = FileEventStore::open(path).expect("open file store");
+        for event in events.iter().cloned() {
+            store.append(event).expect("append file event");
+        }
+        store.checkpoint().expect("checkpoint file store");
     }
-    store.checkpoint().expect("checkpoint append-file store");
-    let append_ms = append_started.elapsed().as_millis();
-    drop(store);
-
-    let bytes = fs::metadata(&path).expect("append-file metadata").len();
+    let append = append_started.elapsed();
+    let bytes = fs::metadata(path).expect("file store metadata").len();
 
     let reopen_started = Instant::now();
-    let store = FileEventStore::open(&path).expect("reopen append-file store");
-    let reopen_ms = reopen_started.elapsed().as_millis();
-    assert_eq!(store.len(), count);
+    let store = FileEventStore::open(path).expect("reopen file store");
+    let reopen = reopen_started.elapsed();
+    assert_eq!(store.len(), events.len());
 
-    let target = SpaceId::from_bytes([TARGET_SPACE; 32]);
     let query_started = Instant::now();
-    let matching = store.events_for_space(&target);
-    let recent_start = matching.len().saturating_sub(RECENT_LIMIT);
-    std::hint::black_box(&matching[recent_start..]);
-    let query_us = query_started.elapsed().as_micros();
-    let recent_count = matching.len().min(RECENT_LIMIT);
-    drop(store);
+    let recent = store.recent_events_for_space(space, RECENT_LIMIT);
+    black_box(&recent);
+    let recent_query = query_started.elapsed();
 
-    fs::remove_file(&path).expect("remove append-file benchmark");
-
-    println!(
-        "storage-bench backend=append-file count={} append_ms={} reopen_ms={} recent_query_us={} recent_count={} bytes={}",
-        count, append_ms, reopen_ms, query_us, recent_count, bytes
-    );
+    Measurement {
+        append,
+        reopen,
+        recent_query,
+        bytes,
+        recent_count: recent.len(),
+    }
 }
 
-fn run_sqlite_backend(count: usize, events: &[Event]) {
-    let path = temp_path("sqlite", count, "sqlite3");
-    cleanup_sqlite(&path);
-
-    let mut store = SqliteEventStore::open(&path).expect("open sqlite store");
+fn measure_sqlite_store(path: &Path, events: &[Event], space: &SpaceId) -> Measurement {
     let append_started = Instant::now();
-    for event in events {
-        store.append(event.clone()).expect("append sqlite event");
+    {
+        let mut store = SqliteEventStore::open(path).expect("open sqlite store");
+        for event in events.iter().cloned() {
+            store.append(event).expect("append sqlite event");
+        }
+        store.checkpoint().expect("checkpoint sqlite store");
     }
-    store.checkpoint().expect("checkpoint sqlite store");
-    let append_ms = append_started.elapsed().as_millis();
-    drop(store);
-
-    let bytes = sqlite_bytes(&path);
+    let append = append_started.elapsed();
+    let bytes = fs::metadata(path).expect("sqlite metadata").len();
 
     let reopen_started = Instant::now();
-    let store = SqliteEventStore::open(&path).expect("reopen sqlite store");
-    let reopen_ms = reopen_started.elapsed().as_millis();
-    assert_eq!(store.len(), count);
+    let store = SqliteEventStore::open(path).expect("reopen sqlite store");
+    let reopen = reopen_started.elapsed();
+    assert_eq!(store.len(), events.len());
 
-    let target = SpaceId::from_bytes([TARGET_SPACE; 32]);
     let query_started = Instant::now();
     let recent = store
-        .recent_events_for_space(&target, RECENT_LIMIT)
+        .recent_events_for_space(space, RECENT_LIMIT)
         .expect("query sqlite recent history");
-    std::hint::black_box(&recent);
-    let query_us = query_started.elapsed().as_micros();
-    let recent_count = recent.len();
-    drop(store);
+    black_box(&recent);
+    let recent_query = query_started.elapsed();
 
-    cleanup_sqlite(&path);
+    Measurement {
+        append,
+        reopen,
+        recent_query,
+        bytes,
+        recent_count: recent.len(),
+    }
+}
+
+fn print_measurement(backend: &str, measurement: Measurement, events: usize) {
+    let append_seconds = measurement.append.as_secs_f64();
+    let events_per_second = if append_seconds == 0.0 {
+        f64::INFINITY
+    } else {
+        events as f64 / append_seconds
+    };
 
     println!(
-        "storage-bench backend=sqlite count={} append_ms={} reopen_ms={} recent_query_us={} recent_count={} bytes={}",
-        count, append_ms, reopen_ms, query_us, recent_count, bytes
+        "backend={} append_ms={:.3} append_events_per_s={:.1} reopen_ms={:.3} recent_query_us={:.3} bytes={} recent_count={}",
+        backend,
+        measurement.append.as_secs_f64() * 1_000.0,
+        events_per_second,
+        measurement.reopen.as_secs_f64() * 1_000.0,
+        measurement.recent_query.as_secs_f64() * 1_000_000.0,
+        measurement.bytes,
+        measurement.recent_count
     );
 }
 
-fn temp_path(backend: &str, count: usize, extension: &str) -> PathBuf {
-    env::temp_dir().join(format!(
-        "seed-storage-bench-{backend}-{count}-{}.{}",
-        std::process::id(),
-        extension
+fn temp_path(extension: &str, count: usize) -> PathBuf {
+    std::env::temp_dir().join(format!(
+        "seed-storage-compare-{}-{count}.{extension}",
+        std::process::id()
     ))
 }
 
-fn sqlite_bytes(path: &Path) -> u64 {
-    let mut total = fs::metadata(path)
-        .map(|metadata| metadata.len())
-        .unwrap_or(0);
-    for suffix in ["-wal", "-shm"] {
-        let mut sidecar = path.as_os_str().to_os_string();
-        sidecar.push(suffix);
-        total += fs::metadata(PathBuf::from(sidecar))
-            .map(|metadata| metadata.len())
-            .unwrap_or(0);
-    }
-    total
+fn cleanup_file(path: &Path) {
+    let _ = fs::remove_file(path);
 }
 
 fn cleanup_sqlite(path: &Path) {
-    let _ = fs::remove_file(path);
-    for suffix in ["-wal", "-shm"] {
-        let mut sidecar = path.as_os_str().to_os_string();
-        sidecar.push(suffix);
-        let _ = fs::remove_file(PathBuf::from(sidecar));
-    }
+    cleanup_file(path);
+
+    let mut wal = path.as_os_str().to_os_string();
+    wal.push("-wal");
+    let _ = fs::remove_file(PathBuf::from(wal));
+
+    let mut shm = path.as_os_str().to_os_string();
+    shm.push("-shm");
+    let _ = fs::remove_file(PathBuf::from(shm));
 }

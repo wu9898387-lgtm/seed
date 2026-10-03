@@ -43,9 +43,9 @@ Linux x86_64 release / stripped：
 | + explicit 128-bit creation nonce | 389,992 B / 380.9 KiB |
 | PR #3 persistent file-store baseline | 398,904 B / 389.6 KiB |
 | current core smoke（含 bounded Event wire） | 390,328 B / 381.2 KiB |
-| current hardened storage smoke | 418,064 B / 408.3 KiB |
+| current hardened storage smoke + Space index | 420,880 B / 411.0 KiB |
 
-同一 CI commit 下，`seed-storage-smoke` 相对 `seed-core-smoke` 的链接后增量为 **27,736 B / 27.1 KiB**。
+同一 CI commit 下，`seed-storage-smoke` 相对 `seed-core-smoke` 的链接后增量为 **30,552 B / 29.8 KiB**。
 这不是最终数据库占用或历史数据文件大小，只是当前 persistent storage code path 的 release binary delta。
 
 Identity + signing + Event + Genesis + 第一版 append-file storage 仍远低于 2 MiB。
@@ -113,7 +113,7 @@ append-only file + index 候选已经进入实现：
 - truncated tail 默认 hard fail；
 - 显式 recovery 只修复 incomplete final frame；
 - persistent storage smoke binary，并在 CI 中实际执行；
-- 独立 size delta report：最新同一 build 增量 **27,736 B / 27.1 KiB**。
+- 独立 size delta report：最新同一 build 增量 **30,552 B / 29.8 KiB**。
 
 已完成第一轮 SQLite 对照：
 
@@ -121,10 +121,26 @@ append-only file + index 候选已经进入实现：
 - bundled：1,488,048 B / 1,453.2 KiB（较 core +1,097,720 B / 1,072.0 KiB）；
 - reopen / duplicate suppression / corrupted row rejection / Space recent-history index smoke 通过；
 - SQLite 保持 optional feature，不进入默认 Core。
+当前 scale/query 对照 harness：
+
+- append-file 增加 `SpaceId -> event positions` 的 in-memory index，使 recent-history 不再全量扫描；
+- `seed-storage-compare <count>` 在同一进程生成同一组 signed Events，分别测量 append-file 与 SQLite；
+- 输出 append wall time / events-per-second、reopen rebuild time、recent-history query time 与 file/db bytes；
+- PR CI 只跑 256 events 作为编译与 correctness smoke，不把共享 runner wall clock 当成正式 benchmark；
+- 10k / 100k / 1M 决策数据应在固定 runner / filesystem 上重复执行并记录环境与多次样本。
+
+PR #9 曾在共享 GitHub runner 上完成一次 **10k sanity run（Space index 加入前）**：
+
+- signed Event 生成：55,394 ms（单独计时，不混入 storage append）；
+- append-file：append 3,436 ms，reopen 24 ms，recent query 115 µs，2,850,008 B；
+- SQLite：append 2,345 ms，reopen 12 ms，recent query 120 µs，4,378,624 B。
+
+这些 wall-clock 数字只证明 harness 与量级可运行，**不是 backend 决策数据**；Space index 后的正式对照仍需固定环境、多次样本与 100k/1M 规模。
+
 
 仍需记录：
 
-- binary delta — **DONE: +27,736 B / 27.1 KiB**（Linux x86_64 stripped release）；
+- binary delta — **DONE: +30,552 B / 29.8 KiB**（Linux x86_64 stripped release）；
 - append throughput；
 - process-kill / crash recovery；
 - file/db size；
