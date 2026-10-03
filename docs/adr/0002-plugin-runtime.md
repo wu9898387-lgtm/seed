@@ -94,6 +94,21 @@ Fuel limits are only one resource-control primitive. Memory/table limits,
 host-call quotas, storage quotas, event-loop scheduling, and permission checks
 still need separate design.
 
+## Current evidence
+
+The integrated Linux release binary that exercises Seed's Ed25519 + canonical
+Event path and the validated/fuel-metered WASM host measured **1,274,376 bytes
+(1,245 KiB)**.
+
+Compared with the canonical Event + crypto binary at **355,624 bytes**, the
+embedded runtime path adds approximately **918,752 bytes**. The integrated
+binary therefore uses about **60.8%** of the current 2 MiB target, leaving
+**822,776 bytes** before that reference ceiling.
+
+This is enough evidence to keep testing the WASM path, but not enough to accept
+it: memory limits, host-call permissions, plugin storage, and platform behavior
+are still unresolved.
+
 ## Evidence required before Accepted
 
 - linked release size for the minimal validated/fuel-metered host;
