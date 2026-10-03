@@ -6,7 +6,7 @@ use crate::space::SpaceId;
 /// Phase 0 treats the bytes as opaque until canonical encoding and hashing are
 /// selected by ADR.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct EventId([u8; Self::LEN]);
+pub struct EventId([u8; 32]);
 
 impl EventId {
     pub const LEN: usize = 32;
