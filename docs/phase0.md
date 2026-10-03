@@ -58,6 +58,11 @@ The first Ed25519 signature spike then measured **354,936 bytes (347 KiB)**,
 a **71,520-byte** linked-binary increase over the kernel baseline. Format,
 tests, and clippy all passed before the size measurement.
 
+The canonical Event signing-preimage spike then measured **355,624 bytes
+(348 KiB)**, only **688 bytes** above the crypto spike. Its CI run passed 5
+Core tests plus format and clippy, including an exact Ed25519 signature over
+the complete 119-byte deterministic Event vector.
+
 ## What this spike does not decide
 
 It intentionally does not freeze:
