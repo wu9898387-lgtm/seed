@@ -80,9 +80,16 @@ impl Ed25519Signer {
     pub fn generate() -> Result<Self, CryptoError> {
         let mut secret = [0u8; 32];
         getrandom::fill(&mut secret).map_err(|_| CryptoError::EntropyUnavailable)?;
+        Ok(Self::from_secret_bytes(secret))
+    }
+
+    /// Import secret seed material without providing a matching export path.
+    ///
+    /// The input copy is securely zeroized after the signing key is constructed.
+    pub fn from_secret_bytes(mut secret: [u8; 32]) -> Self {
         let key = SigningKey::from_bytes(&secret);
         secret.zeroize();
-        Ok(Self { key })
+        Self { key }
     }
 
     pub fn public_key(&self) -> PublicKey {
@@ -147,5 +154,14 @@ mod tests {
             verify_strict(&signer.public_key(), b"two", &signature),
             Err(CryptoError::InvalidSignature)
         );
+    }
+
+    #[test]
+    fn secret_import_is_deterministic() {
+        let a = Ed25519Signer::from_secret_bytes([7u8; 32]);
+        let b = Ed25519Signer::from_secret_bytes([7u8; 32]);
+
+        assert_eq!(a.public_key(), b.public_key());
+        assert_eq!(a.sign(b"seed").as_bytes(), b.sign(b"seed").as_bytes());
     }
 }
