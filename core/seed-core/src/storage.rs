@@ -14,7 +14,6 @@ use crate::{
 const LOG_MAGIC: &[u8; 4] = b"SELG";
 const LOG_VERSION: u16 = 1;
 const LOG_HEADER_BYTES: usize = 6;
-const RECORD_PREFIX_BYTES: usize = 4 + 32;
 const MAX_EVENT_RECORD_BYTES: usize = 17 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -112,6 +111,7 @@ impl FileEventStore {
         let path = path.as_ref();
         let mut file = OpenOptions::new()
             .create(true)
+            .truncate(false)
             .read(true)
             .write(true)
             .open(path)?;
