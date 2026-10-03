@@ -534,6 +534,50 @@ mod tests {
     }
 
     #[test]
+    fn trailing_wire_bytes_are_rejected() {
+        let root = RootIdentity::generate().unwrap();
+        let device = DeviceIdentity::generate().unwrap();
+        let authorization = root.authorize_device(&device, 1, 10);
+        let record = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 11)
+            .activate(root.document(), &authorization, &device)
+            .unwrap();
+
+        let mut encoded = record.canonical_bytes().unwrap();
+        encoded.push(0);
+
+        assert_eq!(
+            GenesisRecord::from_canonical_bytes(&encoded),
+            Err(GenesisDecodeError::TrailingBytes)
+        );
+    }
+
+    #[test]
+    fn tampered_genesis_body_fails_signature_verification() {
+        let root = RootIdentity::generate().unwrap();
+        let device = DeviceIdentity::generate().unwrap();
+        let authorization = root.authorize_device(&device, 1, 10);
+
+        let mut draft = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 11);
+        draft.add_plugin(plugin(1, b"one")).unwrap();
+        let record = draft
+            .activate(root.document(), &authorization, &device)
+            .unwrap();
+
+        let mut encoded = record.canonical_bytes().unwrap();
+        let config_byte = encoded
+            .iter()
+            .position(|byte| *byte == b'o')
+            .expect("config byte");
+        encoded[config_byte] = b'x';
+
+        let tampered = GenesisRecord::from_canonical_bytes(&encoded).unwrap();
+        assert_eq!(
+            tampered.verify(root.document(), &authorization),
+            Err(GenesisVerifyError::Crypto(CryptoError::InvalidSignature))
+        );
+    }
+
+    #[test]
     fn creator_is_provenance_not_owner_state() {
         let root = RootIdentity::generate().unwrap();
         let device = DeviceIdentity::generate().unwrap();
