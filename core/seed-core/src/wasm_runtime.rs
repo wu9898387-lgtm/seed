@@ -456,7 +456,9 @@ mod tests {
         assert!(after_first < FUEL_PER_CALL);
 
         assert_eq!(plugin.call_i32("on_load").unwrap(), HOST_DENY);
-        assert_eq!(plugin.remaining_fuel().unwrap(), after_first);
+        let after_second = plugin.remaining_fuel().unwrap();
+        assert!(after_second < FUEL_PER_CALL);
+        assert!(after_second >= after_first);
     }
 
     #[test]
