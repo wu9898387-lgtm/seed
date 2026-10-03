@@ -75,4 +75,35 @@ mod tests {
         assert_eq!(result, 42);
         assert!(remaining_fuel < 10_000);
     }
+
+    #[test]
+    fn malformed_module_is_rejected() {
+        use wasmi::{Config, Engine, Module};
+
+        let config = Config::default();
+        let engine = Engine::new(&config);
+        assert!(Module::new(&engine, &[0x00, 0x61, 0x73]).is_err());
+    }
+
+    #[test]
+    fn zero_fuel_prevents_plugin_execution() {
+        use super::ADD_ONE_WASM;
+        use wasmi::{Config, Engine, Linker, Module, Store};
+
+        let mut config = Config::default();
+        config.consume_fuel(true).allow_start_fn(false);
+
+        let engine = Engine::new(&config);
+        let module = Module::new(&engine, ADD_ONE_WASM).unwrap();
+        let mut store = Store::new(&engine, ());
+        store.set_fuel(0).unwrap();
+
+        let linker = <Linker<()>>::new(&engine);
+        let instance = linker.instantiate_and_start(&mut store, &module).unwrap();
+        let add_one = instance
+            .get_typed_func::<i32, i32>(&store, "add_one")
+            .unwrap();
+
+        assert!(add_one.call(&mut store, 41).is_err());
+    }
 }
