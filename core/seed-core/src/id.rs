@@ -24,6 +24,15 @@ macro_rules! typed_id {
                 write!(f, "…)")
             }
         }
+
+        impl fmt::Display for $name {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                for byte in &self.0 {
+                    write!(f, "{byte:02x}")?;
+                }
+                Ok(())
+            }
+        }
     };
 }
 
