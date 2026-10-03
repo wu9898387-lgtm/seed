@@ -44,6 +44,6 @@ printf 'seed-transport-smoke release bytes: %s\n' "$TRANSPORT_BYTES"
 printf 'seed-transport-smoke release KiB: '
 awk "BEGIN { printf \"%.1f\\n\", $TRANSPORT_BYTES / 1024 }"
 
-printf 'loopback-transport delta bytes: %s\n' "$TRANSPORT_DELTA"
-printf 'loopback-transport delta KiB: '
+printf 'transport-stack delta bytes: %s\n' "$TRANSPORT_DELTA"
+printf 'transport-stack delta KiB: '
 awk "BEGIN { printf \"%.1f\\n\", $TRANSPORT_DELTA / 1024 }"
