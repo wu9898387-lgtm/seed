@@ -1,6 +1,4 @@
-use seed_core::capability::{
-    builtin, CapabilityPolicy, CapabilityRequest, Decision,
-};
+use seed_core::capability::{builtin, CapabilityPolicy, CapabilityRequest, Decision};
 use seed_core::event::EventEnvelope;
 use seed_core::identity::IdentityId;
 use seed_core::space::SpaceId;
