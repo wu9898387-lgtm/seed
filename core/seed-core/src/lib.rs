@@ -6,6 +6,7 @@ pub mod codec;
 #[cfg(feature = "crypto-ed25519")]
 pub mod crypto;
 pub mod event;
+pub mod genesis;
 pub mod identity;
 pub mod plugin;
 pub mod space;
