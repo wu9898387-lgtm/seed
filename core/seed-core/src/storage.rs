@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fs::{File, OpenOptions},
     io::{self, Read, Seek, SeekFrom, Write},
     path::Path,
@@ -165,6 +165,7 @@ pub struct FileEventStore {
     file: File,
     seen: HashSet<EventId>,
     events: Vec<Event>,
+    space_index: HashMap<SpaceId, Vec<usize>>,
 }
 
 impl FileEventStore {
@@ -216,6 +217,7 @@ impl FileEventStore {
             file,
             seen: HashSet::new(),
             events: Vec::new(),
+            space_index: HashMap::new(),
         };
         let recovery = store.rebuild_index(recover_tail)?;
         store.file.seek(SeekFrom::End(0))?;
@@ -269,11 +271,34 @@ impl FileEventStore {
                     id: event.id(),
                 });
             }
+
+            let position = self.events.len();
+            self.space_index
+                .entry(event.header().space)
+                .or_default()
+                .push(position);
             self.events.push(event);
             offset += total_frame_len;
         }
 
         Ok(RecoveryOutcome::Clean)
+    }
+
+    /// Return the newest accepted Events for one Space without scanning every
+    /// Event in the local log. The returned references remain chronological.
+    pub fn recent_events_for_space(&self, space: &SpaceId, limit: usize) -> Vec<&Event> {
+        if limit == 0 {
+            return Vec::new();
+        }
+
+        let Some(positions) = self.space_index.get(space) else {
+            return Vec::new();
+        };
+        let start = positions.len().saturating_sub(limit);
+        positions[start..]
+            .iter()
+            .map(|&position| &self.events[position])
+            .collect()
     }
 
     fn handle_truncated_tail(
@@ -328,6 +353,11 @@ impl EventStore for FileEventStore {
         }
 
         self.seen.insert(event.id());
+        let position = self.events.len();
+        self.space_index
+            .entry(event.header().space)
+            .or_default()
+            .push(position);
         self.events.push(event);
         Ok(AppendOutcome::Inserted)
     }
@@ -341,9 +371,11 @@ impl EventStore for FileEventStore {
     }
 
     fn events_for_space(&self, space: &SpaceId) -> Vec<&Event> {
-        self.events
-            .iter()
-            .filter(|event| &event.header().space == space)
+        self.space_index
+            .get(space)
+            .into_iter()
+            .flatten()
+            .map(|&position| &self.events[position])
             .collect()
     }
 
@@ -446,6 +478,42 @@ mod tests {
             assert_eq!(
                 store.events_for_space(&SpaceId::from_bytes([9; 32])).len(),
                 1
+            );
+        }
+
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn persistent_recent_history_uses_space_index() {
+        let path = test_path("recent-space-index");
+
+        {
+            let mut store = FileEventStore::open(&path).unwrap();
+            store.append(event(1, 9)).unwrap();
+            store.append(event(2, 8)).unwrap();
+            store.append(event(3, 9)).unwrap();
+            store.append(event(4, 9)).unwrap();
+
+            let recent = store.recent_events_for_space(&SpaceId::from_bytes([9; 32]), 2);
+            assert_eq!(
+                recent
+                    .iter()
+                    .map(|event| event.header().sequence)
+                    .collect::<Vec<_>>(),
+                vec![3, 4]
+            );
+        }
+
+        {
+            let store = FileEventStore::open(&path).unwrap();
+            let recent = store.recent_events_for_space(&SpaceId::from_bytes([9; 32]), 2);
+            assert_eq!(
+                recent
+                    .iter()
+                    .map(|event| event.header().sequence)
+                    .collect::<Vec<_>>(),
+                vec![3, 4]
             );
         }
 
