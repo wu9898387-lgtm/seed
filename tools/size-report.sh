@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cargo build --release -p seed-phase0-core -p seed-phase0-crypto -p seed-phase0-event
+cargo build --release -p seed-phase0-core -p seed-phase0-crypto -p seed-phase0-event -p seed-phase0-plugin-wasm
 
 budget="$((2 * 1024 * 1024))"
 
@@ -17,22 +17,27 @@ measure() {
 core_binary="target/release/seed-phase0-core"
 crypto_binary="target/release/seed-phase0-crypto"
 event_binary="target/release/seed-phase0-event"
+plugin_binary="target/release/seed-phase0-plugin-wasm"
 
 core_bytes="$(wc -c < "${core_binary}" | tr -d '[:space:]')"
 crypto_bytes="$(wc -c < "${crypto_binary}" | tr -d '[:space:]')"
 event_bytes="$(wc -c < "${event_binary}" | tr -d '[:space:]')"
+plugin_bytes="$(wc -c < "${plugin_binary}" | tr -d '[:space:]')"
 delta="$((crypto_bytes - core_bytes))"
 event_delta="$((event_bytes - crypto_bytes))"
+plugin_delta="$((plugin_bytes - core_bytes))"
 
 measure "${core_binary}"
 measure "${crypto_binary}"
 measure "${event_binary}"
+measure "${plugin_binary}"
 printf 'crypto-vs-kernel delta: %s bytes\n' "${delta}"
 printf 'event-vs-crypto delta: %s bytes\n' "${event_delta}"
+printf 'plugin-runtime-vs-kernel delta: %s bytes\n' "${plugin_delta}"
 printf 'phase0 reference budget: %s bytes (2 MiB)\n' "${budget}"
 
-if (( event_bytes > budget )); then
-  printf 'warning: event spike exceeds the 2 MiB Core target\n' >&2
+if (( plugin_bytes > budget )); then
+  printf 'warning: plugin runtime spike exceeds the 2 MiB Core target\n' >&2
 else
-  printf 'status: event spike remains within the current 2 MiB reference target\n'
+  printf 'status: plugin runtime spike remains within the current 2 MiB reference target\n'
 fi
