@@ -1,0 +1,30 @@
+name: core-ci
+
+on:
+  push:
+    branches: [main, core-kernel-spike]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Check
+        run: cargo check --workspace
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --workspace
+      - name: Protocol vector smoke
+        run: cargo run --quiet --bin seed-vector
+      - name: Release size
+        run: sh tools/size-report.sh
