@@ -2,6 +2,8 @@
 #![forbid(unsafe_code)]
 
 pub mod capability;
+#[cfg(feature = "crypto-ed25519")]
+pub mod crypto;
 pub mod event;
 pub mod identity;
 pub mod plugin;
