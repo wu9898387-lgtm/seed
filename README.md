@@ -201,8 +201,8 @@ Seed 希望保持一个非常小的基础核心。
 
 项目已经从纯概念阶段进入 **Phase 0 / Core Kernel Spike**。
 
-当前 `main` 已经包含 Root/Device signing、DeviceAuthorization、signed Event、Capability DefaultDeny、Genesis schema/wire v2、128-bit creation nonce、plugin digest pinning、deterministic protocol vector v2 和 release-size CI。
+当前 `main` 已经包含 Root/Device signing、DeviceAuthorization、signed Event、Capability DefaultDeny、Genesis schema/wire v2、128-bit creation nonce、plugin digest pinning、deterministic protocol vector v2、std-only persistent FileEventStore 和 release-size CI。
 
-当前 Genesis + creation nonce 后的 `seed-core` smoke binary 实测约 **380.9 KiB**（Linux x86_64 stripped release）。这只是阶段性基线，不包含 persistent storage、Transport 和 Plugin Runtime。
+在同一 CI 构建中，`seed-core-smoke` 为 **380.8 KiB**，包含 persistent file-store 路径的 `seed-storage-smoke` 为 **389.6 KiB**，持久化路径增量约 **8.7 KiB**。当前仍不包含 Transport 与 Plugin Runtime。
 
-协议仍未冻结。Genesis uniqueness 已进入测试基线；当前优先级转为持久化 Event Store、Transport/Relay 与插件沙箱。
+协议仍未冻结。持久化 Event Store 已有 append-file baseline；当前优先级转为大历史/SQLite 对照、Transport/Relay 与插件沙箱。
