@@ -171,7 +171,9 @@ append-file 候选已经覆盖/正在覆盖：
 - corrupted checksum rejection；
 - truncated tail strict rejection；
 - explicit final-tail recovery；
-- release binary size delta。
+- release binary size delta：`seed-core-smoke` 390,328 B / 381.2 KiB，
+  `seed-storage-smoke` 418,064 B / 408.3 KiB，delta 27,736 B / 27.1 KiB；
+- CI full gate（fmt/check/clippy/tests/protocol smoke/storage smoke/size）通过。
 
 仍需：
 
