@@ -108,10 +108,10 @@ Loopback + TCP Direct/Relay fallback 已验证：
 - truncated TCP frame 拒绝；
 - endpoint 不进入 `TransportFrame`，上层仍只看到 bytes + `TransportPath`；
 - 无新增第三方依赖；
-- CI 需在当前 main rebase 后重新通过 fmt/check/clippy/tests/protocol/storage/transport/size gate；
-- Linux x86_64 stripped release：`seed-transport-smoke` **474,696 B / 463.6 KiB**；
-- 相对 core 390,328 B / 381.2 KiB 总增量 **84,368 B / 82.4 KiB**；
-- 相对上一版 Loopback-only smoke 404,432 B，新 TCP + fallback 路径增加约 **70,264 B / 68.6 KiB**。
+- 当前 main rebase 后 CI fmt/check/clippy/tests/protocol/storage/transport/size 全绿，43 个 unit tests + protocol integration test 通过；
+- Linux x86_64 stripped release：`seed-transport-smoke` **476,488 B / 465.3 KiB**；
+- 相对 core 390,328 B / 381.2 KiB 总增量 **86,160 B / 84.1 KiB**；
+- 相对上一版 Loopback-only smoke 404,432 B，新 TCP + fallback 路径增加约 **72,056 B / 70.4 KiB**。
 
 当前 relay smoke 转发的是 signed canonical Event bytes，而不是 E2EE ciphertext，
 所以“Relay 默认只处理端到端密文”这一产品约束仍未完成验证。
