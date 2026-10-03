@@ -226,11 +226,8 @@ impl FileEventStore {
                 return Err(StorageError::CorruptFrame { offset });
             }
 
-            let event =
-                Event::from_canonical_bytes(&event_bytes).map_err(|error| StorageError::EventDecode {
-                    offset,
-                    error,
-                })?;
+            let event = Event::from_canonical_bytes(&event_bytes)
+                .map_err(|error| StorageError::EventDecode { offset, error })?;
 
             if !self.seen.insert(event.id()) {
                 return Err(StorageError::DuplicateEventInLog {
@@ -272,9 +269,7 @@ impl EventStore for FileEventStore {
             return Ok(AppendOutcome::Duplicate);
         }
 
-        let event_bytes = event
-            .canonical_bytes()
-            .map_err(StorageError::EventEncode)?;
+        let event_bytes = event.canonical_bytes().map_err(StorageError::EventEncode)?;
         if event_bytes.len() > MAX_EVENT_WIRE_BYTES {
             return Err(StorageError::EventEncode(EncodeError::BodyTooLarge));
         }
@@ -484,7 +479,11 @@ mod tests {
         }
 
         {
-            let mut file = OpenOptions::new().read(true).write(true).open(&path).unwrap();
+            let mut file = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&path)
+                .unwrap();
             let checksum_offset = STORE_MAGIC.len() as u64 + 4;
             file.seek(SeekFrom::Start(checksum_offset)).unwrap();
             let mut byte = [0u8; 1];
