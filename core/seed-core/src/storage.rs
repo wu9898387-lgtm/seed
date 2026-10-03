@@ -36,9 +36,14 @@ impl fmt::Display for StorageError {
         match self {
             Self::Io(error) => write!(f, "storage I/O error: {error}"),
             Self::InvalidHeader => f.write_str("invalid Seed event-log header"),
-            Self::EventTooLarge => f.write_str("event is too large for the event-log record format"),
+            Self::EventTooLarge => {
+                f.write_str("event is too large for the event-log record format")
+            }
             Self::RecordTooLarge { offset, len } => {
-                write!(f, "event-log record at offset {offset} is too large: {len} bytes")
+                write!(
+                    f,
+                    "event-log record at offset {offset} is too large: {len} bytes"
+                )
             }
             Self::CorruptRecord { offset } => {
                 write!(f, "event-log record at offset {offset} is corrupt")
@@ -154,8 +159,8 @@ impl FileEventStore {
             }
 
             let record_len = u32::from_be_bytes(length_bytes);
-            let record_len_usize = usize::try_from(record_len)
-                .map_err(|_| StorageError::RecordTooLarge {
+            let record_len_usize =
+                usize::try_from(record_len).map_err(|_| StorageError::RecordTooLarge {
                     offset: record_offset,
                     len: record_len,
                 })?;
@@ -176,10 +181,9 @@ impl FileEventStore {
                 }
             }
 
-            let event = decode_event_record(&record)
-                .map_err(|_| StorageError::CorruptRecord {
-                    offset: record_offset,
-                })?;
+            let event = decode_event_record(&record).map_err(|_| StorageError::CorruptRecord {
+                offset: record_offset,
+            })?;
 
             if seen.insert(event.id()) {
                 events.push(event);
@@ -473,14 +477,8 @@ mod tests {
         let duplicate = event.clone();
         let mut store = InMemoryEventStore::default();
 
-        assert_eq!(
-            store.append(event).unwrap(),
-            AppendOutcome::Inserted
-        );
-        assert_eq!(
-            store.append(duplicate).unwrap(),
-            AppendOutcome::Duplicate
-        );
+        assert_eq!(store.append(event).unwrap(), AppendOutcome::Inserted);
+        assert_eq!(store.append(duplicate).unwrap(), AppendOutcome::Duplicate);
         assert_eq!(store.len(), 1);
     }
 
@@ -504,17 +502,17 @@ mod tests {
 
         {
             let mut store = FileEventStore::open(&path).unwrap();
-            assert_eq!(
-                store.append(original).unwrap(),
-                AppendOutcome::Inserted
-            );
+            assert_eq!(store.append(original).unwrap(), AppendOutcome::Inserted);
             assert_eq!(store.len(), 1);
         }
 
         {
             let store = FileEventStore::open(&path).unwrap();
             assert_eq!(store.len(), 1);
-            assert_eq!(store.events_for_space(&SpaceId::from_bytes([9; 32])).len(), 1);
+            assert_eq!(
+                store.events_for_space(&SpaceId::from_bytes([9; 32])).len(),
+                1
+            );
             assert_eq!(
                 store.events_for_space(&SpaceId::from_bytes([9; 32]))[0].id(),
                 original_id
@@ -531,16 +529,10 @@ mod tests {
         let duplicate = original.clone();
 
         let mut store = FileEventStore::open(&path).unwrap();
-        assert_eq!(
-            store.append(original).unwrap(),
-            AppendOutcome::Inserted
-        );
+        assert_eq!(store.append(original).unwrap(), AppendOutcome::Inserted);
         let first_len = fs::metadata(&path).unwrap().len();
 
-        assert_eq!(
-            store.append(duplicate).unwrap(),
-            AppendOutcome::Duplicate
-        );
+        assert_eq!(store.append(duplicate).unwrap(), AppendOutcome::Duplicate);
         assert_eq!(fs::metadata(&path).unwrap().len(), first_len);
 
         drop(store);
