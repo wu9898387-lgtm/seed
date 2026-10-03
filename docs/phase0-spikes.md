@@ -25,7 +25,10 @@ PR #1 已 squash 合并到 `main`，第一批 Core Kernel 实现和 CI 测量已
 - Genesis plugin digest pinning；
 - canonical plugin ordering；
 - deterministic protocol vector；
+- canonical Event wire encode/decode；
 - append-only in-memory Event Store；
+- append-only file Event Store candidate；
+- restart index rebuild / checksum corruption detection / explicit tail recovery；
 - release-size CI。
 
 ### 当前 size baseline
@@ -90,21 +93,38 @@ Linux x86_64 release / stripped：
 
 ### A3 Persistent storage
 
-**TODO**
+**IN PROGRESS**
 
-比较：
+append-only file + index 候选已经进入实现：
 
-- SQLite；
+- zero new dependency；
+- canonical Event wire records；
+- EventId duplicate suppression；
+- restart 顺序 scan + in-memory index rebuild；
+- u32 frame length 在分配前做上限检查；
+- domain-separated SHA-256 frame checksum；
+- checksum mismatch hard fail；
+- truncated tail 默认 hard fail；
+- 显式 recovery 只修复 incomplete final frame；
+- persistent storage smoke binary；
+- 独立 size delta report。
+
+仍需比较：
+
+- SQLite adapter；
 - append-only file + index。
 
-记录：
+仍需记录：
 
-- binary delta；
+- binary delta（CI 正在独立报告）；
 - append throughput；
-- recovery；
+- process-kill / crash recovery；
 - file/db size；
 - recent-history query；
-- 10k / 100k event rebuild。
+- 10k / 100k event rebuild；
+- SQLite 同条件数据。
+
+在这些数据完成前，不把 append-file 标记为 Accepted。
 
 ---
 
@@ -119,6 +139,9 @@ Linux x86_64 release / stripped：
 - Genesis canonical ordering；
 - duplicate plugin rejection；
 - canonical Genesis decode/re-encode check；
+- canonical Event decode/re-encode check；
+- Event schema/payload/body size bounds；
+- Event wire deterministic vector；
 - deterministic vector。
 
 ### TODO
@@ -311,6 +334,7 @@ RelayTransport
 
 ```
 seed-core smoke
+seed-storage smoke
 tree host
 relay
 plugin runtime host
@@ -336,6 +360,7 @@ fresh-install footprint
 - [ ] Device revocation
 - [ ] canonical decoder fuzzing
 - [ ] independent/cross-language vector
+- [x] append-file persistent Event Store candidate
 - [ ] persistent storage comparison
 - [ ] Transport adapters
 - [ ] Relay fallback
@@ -352,7 +377,7 @@ fresh-install footprint
 当前最合理的顺序：
 
 ```
-1. persistent Event Store spike
+1. finish persistent storage comparison（append-file measurements + SQLite）
 2. Transport abstraction + Loopback
 3. TCP Direct + Relay fallback
 4. Plugin Runtime comparison
