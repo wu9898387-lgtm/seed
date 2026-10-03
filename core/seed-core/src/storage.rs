@@ -167,11 +167,7 @@ impl FileEventStore {
     }
 
     fn replay(&mut self) -> Result<(), StorageError> {
-        loop {
-            let Some(len) = read_record_len(&mut self.file)? else {
-                break;
-            };
-
+        while let Some(len) = read_record_len(&mut self.file)? {
             let len = len as usize;
             if len > MAX_STORED_EVENT_BYTES {
                 return Err(StorageError::RecordTooLarge);
