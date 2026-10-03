@@ -108,12 +108,18 @@ Event wire 语义下比较，而不是引入第二套协议格式。
 同一 Linux x86_64 stripped release CI：
 
 - core：390,328 B / 381.2 KiB；
-- append-file：418,064 B / 408.3 KiB，较 core +27,736 B / 27.1 KiB；
+- append-file + Space index：420,880 B / 411.0 KiB，较 core +30,552 B / 29.8 KiB；
 - SQLite system-linked：430,656 B / 420.6 KiB，较 core +40,328 B / 39.4 KiB；
 - SQLite bundled：1,488,048 B / 1,453.2 KiB，较 core +1,097,720 B / 1,072.0 KiB。
 
 因此 bundled SQLite 不适合作为 Seed 极小默认 Core 的基线；system-linked SQLite
 仍然是有竞争力的可选 backend，需要继续用 scale/query/crash/platform 数据比较。
+
+为保证 query 对照可解释，append-file 同样维护按 Space 的 in-memory index，
+并提供 bounded recent-history lookup。comparison harness 对两个 backend 使用同一预生成
+signed Event corpus，分别记录 durable append、reopen/rebuild、recent-history query 与
+persisted bytes。共享 GitHub Actions 仅运行小规模 correctness smoke；用于 ADR 决策的
+10k / 100k / 1M 数据必须来自固定 runner / filesystem 的重复测量。
 
 ## MVP backend
 
@@ -181,7 +187,7 @@ append-file 候选的价值是提供一个**零新增依赖**、可测量的下�
 原因：
 
 - 还没有 10k / 100k rebuild 数据；
-- recent-history query 尚未优化；
+- recent-history 已有 Space index，但规模数据尚未在固定环境重复测量；
 - compaction / index lifecycle 尚未设计；
 - SQLite 对 crash consistency、query/index、跨平台工具链可能更有优势；
 - Tree Host 与桌面客户端可能最终需要不同 adapter。
@@ -198,7 +204,7 @@ append-file 候选已经覆盖/正在覆盖：
 - truncated tail strict rejection；
 - explicit final-tail recovery；
 - release binary size delta：`seed-core-smoke` 390,328 B / 381.2 KiB，
-  `seed-storage-smoke` 418,064 B / 408.3 KiB，delta 27,736 B / 27.1 KiB；
+  `seed-storage-smoke` 420,880 B / 411.0 KiB，delta 30,552 B / 29.8 KiB；
 - CI full gate（fmt/check/clippy/tests/protocol smoke/storage smoke/size）通过。
 
 仍需：
