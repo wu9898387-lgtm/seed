@@ -19,6 +19,11 @@ name = "seed-sqlite-storage-smoke"
 path = "src/bin/seed-sqlite-storage-smoke.rs"
 required-features = ["sqlite-storage"]
 
+[[bin]]
+name = "seed-storage-bench"
+path = "src/bin/seed-storage-bench.rs"
+required-features = ["sqlite-storage"]
+
 [dependencies]
 ed25519-dalek = { version = "=3.0.0", default-features = false, features = ["zeroize"] }
 getrandom = "=0.4.3"
