@@ -1,8 +1,6 @@
 use core::fmt;
 
-use ed25519_dalek::{
-    Signature as DalekSignature, Signer as _, SigningKey, VerifyingKey,
-};
+use ed25519_dalek::{Signature as DalekSignature, Signer as _, SigningKey, VerifyingKey};
 use sha2::{Digest, Sha256};
 use zeroize::Zeroize;
 
