@@ -8,6 +8,7 @@ members = [
     "spikes/phase0-storage-append",
     "spikes/phase0-storage-sqlite",
     "spikes/phase0-transport",
+    "spikes/phase0-genesis",
 ]
 resolver = "2"
 
