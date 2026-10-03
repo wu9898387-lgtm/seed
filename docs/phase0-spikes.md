@@ -43,9 +43,9 @@ Linux x86_64 release / stripped：
 | + explicit 128-bit creation nonce | 389,992 B / 380.9 KiB |
 | PR #3 persistent file-store baseline | 398,904 B / 389.6 KiB |
 | current core smoke（含 bounded Event wire） | 390,328 B / 381.2 KiB |
-| current hardened storage smoke | 418,064 B / 408.3 KiB |
+| current hardened storage smoke + Space index | 420,880 B / 411.0 KiB |
 
-同一 CI commit 下，`seed-storage-smoke` 相对 `seed-core-smoke` 的链接后增量为 **27,736 B / 27.1 KiB**。
+同一 CI commit 下，`seed-storage-smoke` 相对 `seed-core-smoke` 的链接后增量为 **30,552 B / 29.8 KiB**。
 这不是最终数据库占用或历史数据文件大小，只是当前 persistent storage code path 的 release binary delta。
 
 Identity + signing + Event + Genesis + 第一版 append-file storage 仍远低于 2 MiB。
@@ -113,7 +113,7 @@ append-only file + index 候选已经进入实现：
 - truncated tail 默认 hard fail；
 - 显式 recovery 只修复 incomplete final frame；
 - persistent storage smoke binary，并在 CI 中实际执行；
-- 独立 size delta report：最新同一 build 增量 **27,736 B / 27.1 KiB**。
+- 独立 size delta report：最新同一 build 增量 **30,552 B / 29.8 KiB**。
 
 已完成第一轮 SQLite 对照：
 
@@ -122,9 +122,18 @@ append-only file + index 候选已经进入实现：
 - reopen / duplicate suppression / corrupted row rejection / Space recent-history index smoke 通过；
 - SQLite 保持 optional feature，不进入默认 Core。
 
+当前 storage comparison harness 已进入主线；本轮进一步统一 query 语义：
+
+- append-file 维护 `SpaceId -> event positions` in-memory index；
+- append-file / SQLite recent-history 都使用 bounded indexed lookup（默认 limit 64）；
+- `seed-storage-compare` 预生成同一 signed Event corpus，避免把签名成本计入 backend append；
+- 输出 durable append、reopen/rebuild、recent-history query 与 persisted bytes；
+- PR CI 只跑 256 events correctness smoke，共享 runner wall clock 不作为 backend 性能结论；
+- 10k / 100k / 1M 决策数据必须在固定 runner / filesystem 上重复执行，并记录环境与多次样本。
+
 仍需记录：
 
-- binary delta — **DONE: +27,736 B / 27.1 KiB**（Linux x86_64 stripped release）；
+- binary delta — **DONE: +30,552 B / 29.8 KiB**（Linux x86_64 stripped release）；
 - append throughput；
 - process-kill / crash recovery；
 - file/db size；

@@ -24,7 +24,7 @@ fn main() {
     let authorization = root.authorize_device(&device, 1, 0);
 
     println!(
-        "storage-bench contract=v1 protocol={} recent_limit={} counts={:?}",
+        "storage-bench contract=v2 protocol={} recent_limit={} counts={:?}",
         PROTOCOL_VERSION, RECENT_LIMIT, counts
     );
 
@@ -120,11 +120,10 @@ fn run_file_backend(count: usize, events: &[Event]) {
 
     let target = SpaceId::from_bytes([TARGET_SPACE; 32]);
     let query_started = Instant::now();
-    let matching = store.events_for_space(&target);
-    let recent_start = matching.len().saturating_sub(RECENT_LIMIT);
-    std::hint::black_box(&matching[recent_start..]);
+    let recent = store.recent_events_for_space(&target, RECENT_LIMIT);
+    std::hint::black_box(&recent);
     let query_us = query_started.elapsed().as_micros();
-    let recent_count = matching.len().min(RECENT_LIMIT);
+    let recent_count = recent.len();
     drop(store);
 
     fs::remove_file(&path).expect("remove append-file benchmark");
