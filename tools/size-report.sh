@@ -25,3 +25,13 @@ report_binary() {
 
 report_binary seed-core-smoke
 report_binary seed-storage-smoke
+
+CORE_BIN="$TARGET_DIR/release/seed-core-smoke"
+STORAGE_BIN="$TARGET_DIR/release/seed-storage-smoke"
+CORE_BYTES=$(wc -c < "$CORE_BIN" | tr -d ' ')
+STORAGE_BYTES=$(wc -c < "$STORAGE_BIN" | tr -d ' ')
+DELTA_BYTES=$((STORAGE_BYTES - CORE_BYTES))
+
+printf 'persistent-storage delta bytes: %s\n' "$DELTA_BYTES"
+printf 'persistent-storage delta KiB: '
+awk "BEGIN { printf \"%.1f\\n\", $DELTA_BYTES / 1024 }"
