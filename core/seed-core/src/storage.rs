@@ -26,6 +26,7 @@ pub trait EventStore {
     type Error;
 
     fn append(&mut self, event: Event) -> Result<AppendOutcome, Self::Error>;
+    fn has_event(&self, id: &EventId) -> bool;
     fn len(&self) -> usize;
 
     fn is_empty(&self) -> bool {
@@ -50,6 +51,10 @@ impl EventStore for InMemoryEventStore {
         }
         self.events.push(event);
         Ok(AppendOutcome::Inserted)
+    }
+
+    fn has_event(&self, id: &EventId) -> bool {
+        self.seen.contains(id)
     }
 
     fn len(&self) -> usize {
@@ -97,8 +102,9 @@ impl From<std::io::Error> for FileStoreError {
 /// EventId, then rebuilds the in-memory index.
 ///
 /// A partial final record is treated as an interrupted append and is truncated
-/// back to the last complete record. Corruption in the middle of the log is an
-/// error rather than an excuse to discard later history.
+/// back to the last complete record. A partial initial header that matches the
+/// expected header prefix is repaired. Structural corruption in a complete
+/// record is rejected rather than silently skipped.
 #[derive(Debug)]
 pub struct FileEventStore {
     file: File,
@@ -121,12 +127,17 @@ impl FileEventStore {
         let mut events = Vec::new();
 
         if bytes.is_empty() {
-            file.write_all(LOG_MAGIC)?;
-            file.write_all(&LOG_VERSION.to_be_bytes())?;
-            file.flush()?;
-            file.sync_data()?;
+            write_log_header(&mut file)?;
+        } else if bytes.len() < LOG_HEADER_BYTES {
+            let expected = expected_log_header();
+            if bytes != expected[..bytes.len()] {
+                return Err(FileStoreError::InvalidHeader);
+            }
+
+            file.set_len(0)?;
+            write_log_header(&mut file)?;
         } else {
-            if bytes.len() < LOG_HEADER_BYTES || &bytes[..4] != LOG_MAGIC {
+            if &bytes[..4] != LOG_MAGIC {
                 return Err(FileStoreError::InvalidHeader);
             }
 
@@ -242,6 +253,10 @@ impl EventStore for FileEventStore {
         Ok(AppendOutcome::Inserted)
     }
 
+    fn has_event(&self, id: &EventId) -> bool {
+        self.seen.contains(id)
+    }
+
     fn len(&self) -> usize {
         self.events.len()
     }
@@ -254,6 +269,26 @@ impl EventStore for FileEventStore {
     }
 }
 
+fn expected_log_header() -> [u8; LOG_HEADER_BYTES] {
+    let version = LOG_VERSION.to_be_bytes();
+    [
+        LOG_MAGIC[0],
+        LOG_MAGIC[1],
+        LOG_MAGIC[2],
+        LOG_MAGIC[3],
+        version[0],
+        version[1],
+    ]
+}
+
+fn write_log_header(file: &mut File) -> Result<(), FileStoreError> {
+    file.seek(SeekFrom::Start(0))?;
+    file.write_all(&expected_log_header())?;
+    file.flush()?;
+    file.sync_data()?;
+    Ok(())
+}
+
 fn recover_partial_tail(file: &mut File, valid_len: usize) -> Result<(), FileStoreError> {
     file.set_len(valid_len as u64)?;
     file.seek(SeekFrom::End(0))?;
@@ -263,7 +298,12 @@ fn recover_partial_tail(file: &mut File, valid_len: usize) -> Result<(), FileSto
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::OpenOptions, io::Write, path::PathBuf, process};
+    use std::{
+        fs::OpenOptions,
+        io::Write,
+        path::{Path, PathBuf},
+        process,
+    };
 
     use crate::{
         event::{Event, EventHeader},
@@ -309,10 +349,12 @@ mod tests {
     #[test]
     fn duplicate_event_is_idempotent() {
         let event = event(1, 9);
+        let event_id = event.id();
         let duplicate = event.clone();
         let mut store = InMemoryEventStore::default();
 
         assert_eq!(store.append(event).unwrap(), AppendOutcome::Inserted);
+        assert!(store.has_event(&event_id));
         assert_eq!(store.append(duplicate).unwrap(), AppendOutcome::Duplicate);
         assert_eq!(store.len(), 1);
     }
@@ -335,22 +377,42 @@ mod tests {
         cleanup(&path);
 
         let first = event(1, 9);
+        let first_id = first.id();
         let duplicate = first.clone();
 
         {
             let mut store = FileEventStore::open(&path).unwrap();
             assert_eq!(store.append(first).unwrap(), AppendOutcome::Inserted);
+            assert!(store.has_event(&first_id));
             assert_eq!(store.len(), 1);
         }
 
         {
             let mut reopened = FileEventStore::open(&path).unwrap();
             assert_eq!(reopened.len(), 1);
+            assert!(reopened.has_event(&first_id));
             assert_eq!(
                 reopened.append(duplicate).unwrap(),
                 AppendOutcome::Duplicate
             );
         }
+
+        cleanup(&path);
+    }
+
+    #[test]
+    fn partial_header_is_repaired_on_reopen() {
+        let path = temp_path("partial-header");
+        cleanup(&path);
+
+        std::fs::write(&path, &expected_log_header()[..3]).unwrap();
+
+        let reopened = FileEventStore::open(&path).unwrap();
+        assert!(reopened.is_empty());
+        assert_eq!(
+            std::fs::read(&path).unwrap().as_slice(),
+            expected_log_header().as_slice()
+        );
 
         cleanup(&path);
     }
