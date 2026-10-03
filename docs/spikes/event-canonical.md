@@ -1,6 +1,6 @@
 # Phase 0 Spike — Canonical Event Bytes
 
-> Status: running
+> Status: measured
 
 ## Goal
 
@@ -32,6 +32,20 @@ Expected canonical length: **119 bytes**.
 
 The Core unit test freezes every field at an exact byte offset, and a second
 test freezes an Ed25519 signature over the complete 119-byte output.
+
+## Measurement
+
+GitHub Actions on Ubuntu 24.04 / Rust 1.99.0 measured:
+
+- kernel baseline: **283,416 bytes (277 KiB)**;
+- Ed25519 spike: **354,936 bytes (347 KiB)**;
+- canonical Event + Ed25519 spike: **355,624 bytes (348 KiB)**;
+- canonical Event increment over crypto: **688 bytes**;
+- all 5 Core tests, format, and clippy passed.
+
+This is a linked-binary comparison, not exact symbol-level attribution, but it
+shows the fixed canonical Event framing itself is currently negligible relative
+to the cryptographic dependency.
 
 ## Why not call this the final serialization format?
 
