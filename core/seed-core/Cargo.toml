@@ -9,3 +9,7 @@ path = "src/lib.rs"
 
 [features]
 default = []
+crypto-ed25519 = ["dep:ed25519-dalek"]
+
+[dependencies]
+ed25519-dalek = { version = "3.0.0", default-features = false, features = ["zeroize"], optional = true }
