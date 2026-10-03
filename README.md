@@ -203,14 +203,16 @@ Seed 希望保持一个非常小的基础核心。
 
 当前主线基线已经包含 Root/Device signing、DeviceAuthorization、signed Event、Capability DefaultDeny、Genesis schema/wire v2、128-bit creation nonce、plugin digest pinning、deterministic protocol vector v2 和 release-size CI。
 
-当前 persistent storage Spike 已实现第一版 **append-only file Event Store candidate**：canonical Event wire、EventId 去重、重启索引重建、frame checksum、oversized frame 防护，以及只针对 incomplete final frame 的显式尾部恢复。它仍是 ADR-0005 的候选，不代表已经胜过 SQLite。
+当前 persistent storage Spike 已实现 **append-only file Event Store candidate**：canonical Event wire、EventId 去重、重启索引重建、按 Space 的 in-memory index、frame checksum、oversized frame 防护，以及只针对 incomplete final frame 的显式尾部恢复。它仍是 ADR-0005 的候选，不代表已经胜过 SQLite。
 
 同一 Linux x86_64 stripped release CI 下：
 
 - `seed-core-smoke`：**390,328 B / 381.2 KiB**；
-- `seed-storage-smoke`：**418,064 B / 408.3 KiB**；
-- persistent storage linked delta：**27,736 B / 27.1 KiB**。
+- `seed-storage-smoke`：**420,880 B / 411.0 KiB**；
+- persistent storage linked delta：**30,552 B / 29.8 KiB**。
 
 SQLite 对照 adapter 也已完成第一轮 CI：system-linked smoke 为 **430,656 B / 420.6 KiB**（较 core +39.4 KiB），bundled smoke 为 **1,488,048 B / 1,453.2 KiB**（较 core +约 1.05 MiB）。因此 SQLite 不进入默认 Core；system-linked SQLite 保留为可选 backend，对照 append-file 的 scale/query/crash/platform 数据后再决定 ADR-0005。
 
-协议仍未冻结。Transport abstraction + Loopback 已合入主线；下一优先级是完成 10k/100k storage 对照，并进入 TCP Direct / Relay 与插件沙箱。
+storage comparison harness 已统一为两侧都使用 bounded Space-indexed recent-history；共享 GitHub Actions 只跑 256-event correctness smoke，10k / 100k / 1M 的选型数据必须在固定 runner / filesystem 上重复测量。forced process-kill integration test 也已进入主线：worker 在 store 仍保持打开、没有 checkpoint/clean drop 时被父进程强杀，append-file 与 SQLite WAL 都能在 reopen 后恢复全部已完成的 durable append。这个测试不等价于“任意时刻断电”，mid-write / power-loss 仍需单独验证。
+
+协议仍未冻结。Transport abstraction + Loopback 已合入主线；下一优先级是固定环境 storage scale/power-loss 证据、TCP Direct / Relay fallback，以及插件沙箱。
