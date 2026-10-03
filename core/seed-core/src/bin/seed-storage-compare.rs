@@ -182,7 +182,9 @@ fn temp_path(backend: &str, count: usize, extension: &str) -> PathBuf {
 }
 
 fn sqlite_bytes(path: &Path) -> u64 {
-    let mut total = fs::metadata(path).map(|metadata| metadata.len()).unwrap_or(0);
+    let mut total = fs::metadata(path)
+        .map(|metadata| metadata.len())
+        .unwrap_or(0);
     for suffix in ["-wal", "-shm"] {
         let mut sidecar = path.as_os_str().to_os_string();
         sidecar.push(suffix);
