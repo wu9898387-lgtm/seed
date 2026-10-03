@@ -149,7 +149,9 @@ impl WasmiPluginRuntime {
         host_calls: u32,
     ) -> Result<WasmiPluginInstance, wasmi::Error> {
         if manifest.manifest_version != SUPPORTED_PLUGIN_MANIFEST_VERSION {
-            return Err(wasmi::Error::new("unsupported Seed plugin manifest version"));
+            return Err(wasmi::Error::new(
+                "unsupported Seed plugin manifest version",
+            ));
         }
         if manifest.plugin_api_version != PLUGIN_API_VERSION {
             return Err(wasmi::Error::new("unsupported Seed plugin API version"));
