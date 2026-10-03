@@ -16,6 +16,8 @@ pub mod id;
 pub mod identity;
 pub mod plugin;
 pub mod space;
+#[cfg(feature = "sqlite-storage")]
+pub mod sqlite_storage;
 pub mod storage;
 
 pub const PROTOCOL_VERSION: u16 = 1;
