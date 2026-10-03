@@ -68,10 +68,7 @@ fn main() {
         .verify(root.document(), &authorization)
         .expect("verified event");
 
-    let log_path = std::env::temp_dir().join(format!(
-        "seed-core-smoke-{}.log",
-        std::process::id()
-    ));
+    let log_path = std::env::temp_dir().join(format!("seed-core-smoke-{}.log", std::process::id()));
     let _ = fs::remove_file(&log_path);
 
     {
