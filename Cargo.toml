@@ -2,6 +2,7 @@
 members = [
     "core/seed-core",
     "spikes/phase0-core",
+    "spikes/phase0-crypto",
 ]
 resolver = "2"
 
