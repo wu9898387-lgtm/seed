@@ -1,0 +1,13 @@
+[workspace]
+members = [
+    "core/seed-core",
+    "spikes/phase0-core",
+]
+resolver = "2"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
