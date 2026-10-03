@@ -1,275 +1,365 @@
 # Seed Phase 0 Spike Plan
 
-> 目标：用可重复实验决定技术选型，而不是凭感觉冻结依赖。
+> Status: Active  
+> 目标：用可重复实验收敛技术选型，而不是凭感觉冻结依赖。
 
 ---
 
-## 1. 输出物
+## 1. 已有证据
 
-Phase 0 结束时必须得到：
+`core-kernel-spike` / PR #1 已经完成第一批真实实现和 CI 测量。
 
-- Core Language ADR -> Accepted / Rejected；
-- Plugin Runtime ADR -> engine selected；
-- Serialization ADR -> Accepted；
-- Storage backend recommendation；
-- Transport reference adapter；
-- Identity/Crypto profile test vectors；
-- baseline binary-size report；
-- baseline startup/memory report。
+当前已验证：
+
+- Rust reference Core 可构建；
+- `#![forbid(unsafe_code)]`；
+- typed Identity / Device / Space / Event / Plugin IDs；
+- Ed25519 Root Identity；
+- independent Device signing key；
+- Root -> DeviceAuthorization；
+- strict signature verification；
+- SHA-256 domain-separated IDs；
+- signed Event；
+- Capability primitives + DefaultDeny；
+- Genesis Draft -> immutable record；
+- Genesis plugin digest pinning；
+- canonical plugin ordering；
+- deterministic protocol vector；
+- append-only in-memory Event Store；
+- release-size CI。
+
+### 当前 size baseline
+
+Linux x86_64 release / stripped：
+
+| Slice | Size |
+|---|---:|
+| dependency-free baseline | 282,648 B / 276.0 KiB |
+| identity + signing/event | 376,320 B / 367.5 KiB |
+| + Genesis canonical state machine | 389,816 B / 380.7 KiB |
+
+这说明 Identity + signing + Event + Genesis 目前没有威胁 2 MiB 目标。
+
+真正的 size risk 仍然是：
+
+- persistent storage；
+- transport；
+- plugin runtime。
 
 ---
 
-## 2. Spike A — Rust Core Size
+## 2. CI 状态
 
-### A0 Empty
+当前 `core-ci` 检查：
 
-功能：
+- rustfmt；
+- cargo check；
+- Clippy with `-D warnings`；
+- tests；
+- protocol vector smoke；
+- release size。
 
-- CLI starts；
-- version string；
-- no third-party deps。
+最新检查已恢复为绿色。
+
+任何 Phase 0 代码都不应通过关闭 warning gate 来“修 CI”。
+
+---
+
+## 3. Spike A — Core language / size
+
+### A0 Empty Rust baseline
+
+**DONE**
+
+- 282,648 bytes / 276.0 KiB。
+
+### A1 Identity / signing
+
+**DONE**
+
+- 376,320 bytes / 367.5 KiB。
+- signing layer delta ~91.5 KiB。
+
+### A2 Genesis canonical state machine
+
+**DONE**
+
+- 389,816 bytes / 380.7 KiB。
+- Genesis delta ~13.2 KiB。
+
+### A3 Persistent storage
+
+**TODO**
+
+比较：
+
+- SQLite；
+- append-only file + index。
 
 记录：
 
-- unstripped；
-- stripped；
-- compressed artifact（仅参考，不算 Core size）；
-- startup；
-- RSS。
-
-### A1 Serialization
-
-加入：
-
-- deterministic CBOR encoder/decoder；
-- one Genesis vector。
-
-### A2 Crypto
-
-加入：
-
-- SHA-256；
-- Ed25519 verify/sign；
-- X25519 primitive or selected handshake library；
-- AEAD primitive。
-
-### A3 Storage
-
-分别构建：
-
-- SQLite variant；
-- append-file variant。
-
-### Acceptance
-
-最终 size 以 A3 + minimal transport + plugin interface 的整合构建判断，而不是 Empty binary。
+- binary delta；
+- append throughput；
+- recovery；
+- file/db size；
+- recent-history query；
+- 10k / 100k event rebuild。
 
 ---
 
-## 3. Spike B — Wasm Runtime
+## 4. Spike B — Canonical encoding hardening
 
-候选最少两个。
+当前采用窄的 custom canonical binary encoding。
 
-每个 candidate 构建：
+### 已完成
 
-### B0 Hello
+- fixed-width big-endian primitives；
+- length-prefixed bytes；
+- Genesis canonical ordering；
+- duplicate plugin rejection；
+- canonical Genesis decode/re-encode check；
+- deterministic vector。
 
-Plugin:
+### TODO
+
+- explicit Genesis creation nonce；
+- malformed/oversized corpus；
+- fuzz decoder；
+- independent implementation；
+- cross-language vector；
+- schema evolution experiment。
+
+### Gate
+
+在独立实现与 fuzz 之前，ADR-0003 保持 Provisional。
+
+---
+
+## 5. Spike C — Identity / Crypto
+
+### 已完成
+
+1. Create Root；
+2. Create Device；
+3. Root signs DeviceAuthorization；
+4. Device signs Event；
+5. peer verifies chain；
+6. deterministic vector。
+
+### TODO
+
+- Device revocation；
+- Root key recovery/rotation；
+- persistent secret store adapter；
+- transport KEX；
+- MITM tests；
+- replay tests；
+- key lifecycle threat review。
+
+---
+
+## 6. Spike D — Plugin Runtime
+
+**TODO / major size risk**
+
+候选至少两个 runtime。
+
+每个 candidate：
+
+### D0 Hello
 
 ```
-on_load -> return 0
+on_load -> success
 ```
 
-### B1 Host call
+### D1 Host ABI
 
-循环调用 scoped state read / capability request stub。
+实现：
 
-### B2 Trap
+- scoped state get/put；
+- event subscription stub；
+- capability request stub。
 
-- panic/trap；
+### D2 Resource isolation
+
+测试：
+
+- trap；
 - infinite loop；
-- memory growth。
+- memory growth；
+- OOM；
+- excessive host calls。
 
-### B3 Permission escape
+### D3 Permission escape
 
-尝试：
+插件尝试：
 
 - filesystem；
 - network；
-- Root Key；
-- foreign plugin state。
+- Root key；
+- foreign plugin state；
+- undeclared capability。
 
 ### Measure
 
-- Host binary size delta；
+- Host stripped size delta；
 - plugin package size；
 - instantiate latency；
 - call throughput；
 - peak RSS；
-- limit enforcement；
-- platform support。
-
-### Gate
-
-任何 runtime 只要无法可靠限制插件资源，就不能因为“更小”而被接受。
+- resource limit enforcement。
 
 ---
 
-## 4. Spike C — Canonical CBOR
+## 7. Spike E — Transport
 
-建立至少 10 个 vector：
+**TODO**
 
-- empty/minimal identity；
-- unicode profile-adjacent data；
-- Genesis；
-- plugin refs；
-- integer boundaries；
-- map ordering；
-- malformed indefinite form；
-- duplicate keys；
-- unknown extension；
-- oversized input。
-
-要求：
-
-- bytes deterministic；
-- invalid/noncanonical forms policy 明确；
-- fuzz decoder。
-
----
-
-## 5. Spike D — Identity / Crypto
-
-场景：
-
-1. Create Root；
-2. Create Device；
-3. Root signs Device Certificate；
-4. Device signs Event；
-5. Peer verifies chain；
-6. Revoke Device；
-7. same Device event rejected under updated revocation state。
-
-Handshake：
-
-- first-contact profile；
-- known-contact profile；
-- MITM negative test；
-- replay negative test。
-
----
-
-## 6. Spike E — Storage
-
-数据集：
-
-- 10k events；
-- 100k events；
-- 1M events（如果本地实验成本合理）。
-
-测量：
-
-- append；
-- cold rebuild；
-- query recent messages；
-- plugin state lookup；
-- crash recovery；
-- binary size delta；
-- DB/file size。
-
-重点不是追求极限 benchmark，而是排除明显不适合 MVP 的方案。
-
----
-
-## 7. Spike F — Transport
-
-实现统一 trait/interface 后，写两个 adapter：
+先建立统一 abstraction，再实现：
 
 ```
 LoopbackTransport
 TcpTransport
-```
-
-再实现：
-
-```
 RelayTransport
 ```
 
 测试：
 
 - direct；
-- forced direct failure；
+- direct failure；
 - relay fallback；
 - reconnect；
 - duplicate frame；
 - truncated frame；
 - malicious length；
-- message > limit。
+- oversized message。
 
-上层 Direct session 不允许知道具体 adapter 类型。
-
----
-
-## 8. Spike G — Governance Kernel
-
-不需要 UI。
-
-在测试中：
-
-1. 创建 Empty Group；
-2. Alice 请求 `seed.member.remove`；
-3. Deny；
-4. 创建 Owner Plugin Group；
-5. Alice -> Allow；
-6. Bob -> Deny；
-7. 创建 Voting mock；
-8. request -> Pending；
-9. resolution event -> Allow。
-
-如果为了实现这些场景必须在 Core 写 `role == owner`，Spike 失败。
+上层 Direct session 不允许依赖具体 adapter 类型。
 
 ---
 
-## 9. Size Measurement Contract
+## 8. Spike F — Governance Kernel
 
-Phase 0 必须先固定测试口径。
+### 基础能力
 
-建议 Linux x86_64 baseline：
+**PARTIAL**
 
-- release；
-- LTO；
-- panic abort；
-- stripped；
-- dynamic/system libraries单独报告；
-- debug symbols 不计入；
-- plugins 不计入 Core binary；
-- optional Tree Host binary 单独报告。
+已有：
 
-同时报告：
+- typed Capability；
+- DefaultDeny；
+- no implicit creator authority test。
+
+### TODO
+
+测试完整链：
+
+1. Empty Group；
+2. Alice 请求 MemberRemove -> Deny；
+3. Owner Governance plugin；
+4. Alice -> Allow；
+5. Bob -> Deny；
+6. Voting mock；
+7. request -> Pending；
+8. resolution -> Allow；
+9. install/remove plugin 本身也经过 governance。
+
+如果必须在 Core 写 `role == owner`，Spike 失败。
+
+---
+
+## 9. Spike G — Genesis uniqueness / lifecycle
+
+### 已完成
+
+- Draft；
+- plugin attach；
+- canonical sort；
+- duplicate reject；
+- Device signature；
+- immutable record；
+- GenesisId；
+- SpaceId；
+- package digest pin；
+- creator provenance only。
+
+### Protocol-freeze blocker
+
+加入 explicit random creation nonce。
+
+测试：
+
+- 完全相同 config + 同一 timestamp + 不同 nonce -> 不同 SpaceId；
+- same canonical Genesis input -> deterministic same ID；
+- nonce 被签名覆盖；
+- old vector version 不被静默重定义。
+
+---
+
+## 10. Size Measurement Contract
+
+继续使用可重复的 Linux x86_64 release baseline：
+
+- `opt-level=z`；
+- fat LTO；
+- one codegen unit；
+- `panic=abort`；
+- stripped symbols；
+- system/dynamic dependencies单独报告。
+
+分别报告：
 
 ```
-core executable
-tree host executable
-relay executable
+seed-core smoke
+tree host
+relay
+plugin runtime host
 sample plugin wasm
-total fresh-install footprint
+fresh-install footprint
 ```
 
 不要用压缩包大小替代 executable size。
 
 ---
 
-## 10. Phase 0 Completion Checklist
+## 11. Phase 0 Completion Checklist
 
-- [ ] ADR-0001 有真实 size 数据
-- [ ] ADR-0002 runtime 已比较
-- [ ] ADR-0003 vectors 通过
-- [ ] ADR-0004 storage comparison 完成
-- [ ] ADR-0005 transport adapters 通过
-- [ ] ADR-0006 crypto vectors 通过 review
-- [ ] ADR-0007 Genesis/Event vectors 完成
-- [ ] Threat Model review
-- [ ] CI size report
-- [ ] Multi-node smoke test framework
-- [ ] 下一阶段 backlog 已从实验结果更新
+- [x] Rust baseline
+- [x] Identity / Device signing path
+- [x] Event signature + deterministic ID
+- [x] Genesis state machine
+- [x] Genesis package digest pinning
+- [x] protocol vector
+- [x] release size CI
+- [x] DefaultDeny capability baseline
+- [ ] Genesis explicit nonce
+- [ ] Device revocation
+- [ ] canonical decoder fuzzing
+- [ ] independent/cross-language vector
+- [ ] persistent storage comparison
+- [ ] Transport adapters
+- [ ] Relay fallback
+- [ ] Plugin Runtime comparison
+- [ ] Plugin sandbox escape tests
+- [ ] Governance Allow/Deny/Pending vertical slice
+- [ ] Multi-node smoke framework
+- [ ] Threat Model review against implementation
+
+---
+
+## 12. 下一批实现优先级
+
+当前最合理的顺序：
+
+```
+1. Genesis creation nonce
+2. merge-ready core-kernel PR
+3. persistent Event Store spike
+4. Transport abstraction + Loopback
+5. TCP Direct + Relay fallback
+6. Plugin Runtime comparison
+7. Governance vertical slice
+8. Tree Host
+```
+
+不要先做复杂 UI、语音视频或插件市场。
