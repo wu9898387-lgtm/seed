@@ -279,9 +279,9 @@ connect_direct_or_relay(...)
 - malicious oversized length 在 allocation 前拒绝；
 - oversized outgoing frame rejection；
 - 上层继续通过 `dyn Transport` 使用 adapter；
-- Linux stripped `seed-transport-smoke`：**474,696 B / 463.6 KiB**；
-- 相对 core transport stack delta：**84,368 B / 82.4 KiB**；
-- TCP + fallback 相对 Loopback-only smoke 增量约 **70,264 B / 68.6 KiB**。
+- Linux stripped `seed-transport-smoke`：**476,488 B / 465.3 KiB**；
+- 相对 core transport stack delta：**86,160 B / 84.1 KiB**；
+- TCP + fallback 相对 Loopback-only smoke 增量约 **72,056 B / 70.4 KiB**。
 
 仍需：
 
