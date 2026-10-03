@@ -188,11 +188,21 @@ Seed 希望保持一个非常小的基础核心。
 
 ## 核心文档
 
-- [产品需求文档（PRD）](docs/PRD.md) — 定义产品范围、目标用户、核心流程、功能需求、MVP 和验收标准。
-- [初步架构草案](docs/architecture.md) — 记录当前系统模型与概念结构。
-- [整体设计目标](docs/design-goals.md) — 固定架构不变量、安全边界、协议与模块设计原则。
-- [实现目标与开发路线](docs/implementation-goals.md) — 定义技术 Spike、开发阶段、测试目标、Size Budget 与发布 Gate。
+- [产品需求文档（PRD）](docs/PRD.md) — 产品范围、核心流程、MVP 与验收标准。
+- [初步架构草案](docs/architecture.md) — 总体系统模型。
+- [整体设计目标](docs/design-goals.md) — 架构不变量与安全边界。
+- [实现目标与开发路线](docs/implementation-goals.md) — 开发阶段、测试与发布 Gate。
+- [Protocol Kernel Draft](docs/protocol-kernel.md) — 当前可执行内核协议事实与冻结条件。
+- [Threat Model](docs/threat-model.md) — 攻击面、安全目标与明确非目标。
+- [Phase 0 Spike Plan](docs/phase0-spikes.md) — 已完成实验、实测体积与下一批 Spike。
+- [Architecture Decision Records](docs/adr/README.md) — 技术决策与接受条件。
 
-## 状态
+## 当前开发状态
 
-项目处于非常早期的架构探索阶段。本文档记录当前方向，不代表协议已经冻结。
+项目已经从纯概念阶段进入 **Phase 0 / Core Kernel Spike**。
+
+当前实现分支已经验证 Root/Device signing、DeviceAuthorization、signed Event、Capability DefaultDeny、Genesis 状态机、plugin digest pinning、deterministic protocol vector 和 release-size CI。
+
+当前 Genesis 后的 `seed-core` smoke binary 实测约 **380.7 KiB**（Linux x86_64 stripped release）。这只是阶段性基线，不包含 persistent storage、Transport 和 Plugin Runtime。
+
+协议仍未冻结。当前优先级是继续验证 Genesis uniqueness、持久化 Event Store、Transport/Relay 与插件沙箱。
