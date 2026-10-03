@@ -47,8 +47,16 @@ pub struct RootIdentity {
 impl RootIdentity {
     pub fn generate() -> Result<Self, CryptoError> {
         let signer = Ed25519Signer::generate()?;
+        Ok(Self::from_signer(signer))
+    }
+
+    pub fn from_secret_bytes(secret: [u8; 32]) -> Self {
+        Self::from_signer(Ed25519Signer::from_secret_bytes(secret))
+    }
+
+    fn from_signer(signer: Ed25519Signer) -> Self {
         let document = IdentityDocument::from_root_public_key(signer.public_key());
-        Ok(Self { signer, document })
+        Self { signer, document }
     }
 
     pub const fn document(&self) -> &IdentityDocument {
@@ -83,8 +91,16 @@ pub struct DeviceIdentity {
 impl DeviceIdentity {
     pub fn generate() -> Result<Self, CryptoError> {
         let signer = Ed25519Signer::generate()?;
+        Ok(Self::from_signer(signer))
+    }
+
+    pub fn from_secret_bytes(secret: [u8; 32]) -> Self {
+        Self::from_signer(Ed25519Signer::from_secret_bytes(secret))
+    }
+
+    fn from_signer(signer: Ed25519Signer) -> Self {
         let id = derive_device_id(&signer.public_key());
-        Ok(Self { signer, id })
+        Self { signer, id }
     }
 
     pub const fn id(&self) -> DeviceId {
