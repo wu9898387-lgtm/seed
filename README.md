@@ -192,6 +192,8 @@ Seed 希望保持一个非常小的基础核心。
 - [初步架构草案](docs/architecture.md) — 记录当前系统模型与概念结构。
 - [整体设计目标](docs/design-goals.md) — 固定架构不变量、安全边界、协议与模块设计原则。
 - [实现目标与开发路线](docs/implementation-goals.md) — 定义技术 Spike、开发阶段、测试目标、Size Budget 与发布 Gate。
+- [Phase 0 工程 Spike](docs/phase0.md) — 当前可运行 Core 骨架、测量口径与下一轮技术验证。
+- [ADR 记录](docs/adr/0001-core-language.md) — 重大底层技术选择及其证据、回退条件。
 
 ## 状态
 
