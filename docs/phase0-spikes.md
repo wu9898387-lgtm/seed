@@ -7,7 +7,7 @@
 
 ## 1. 已有证据
 
-`core-kernel-spike` / PR #1 已经完成第一批真实实现和 CI 测量。
+PR #1 已 squash 合并到 `main`，第一批 Core Kernel 实现和 CI 测量已经成为主分支基线。
 
 当前已验证：
 
@@ -37,6 +37,7 @@ Linux x86_64 release / stripped：
 | dependency-free baseline | 282,648 B / 276.0 KiB |
 | identity + signing/event | 376,320 B / 367.5 KiB |
 | + Genesis canonical state machine | 389,816 B / 380.7 KiB |
+| + explicit 128-bit creation nonce | 389,992 B / 380.9 KiB |
 
 这说明 Identity + signing + Event + Genesis 目前没有威胁 2 MiB 目标。
 
@@ -122,7 +123,6 @@ Linux x86_64 release / stripped：
 
 ### TODO
 
-- explicit Genesis creation nonce；
 - malformed/oversized corpus；
 - fuzz decoder；
 - independent implementation；
@@ -283,16 +283,16 @@ RelayTransport
 - package digest pin；
 - creator provenance only。
 
-### Protocol-freeze blocker
+### Explicit creation nonce
 
-加入 explicit random creation nonce。
+**DONE**
 
-测试：
-
+- Genesis schema/wire 已升级到 v2；
+- 加入 128-bit creation nonce；
 - 完全相同 config + 同一 timestamp + 不同 nonce -> 不同 SpaceId；
-- same canonical Genesis input -> deterministic same ID；
-- nonce 被签名覆盖；
-- old vector version 不被静默重定义。
+- nonce 被 canonical bytes 与签名覆盖；
+- protocol vector 已升级到 v2；
+- smoke binary 仅增加约 176 B。
 
 ---
 
@@ -332,7 +332,7 @@ fresh-install footprint
 - [x] protocol vector
 - [x] release size CI
 - [x] DefaultDeny capability baseline
-- [ ] Genesis explicit nonce
+- [x] Genesis explicit nonce
 - [ ] Device revocation
 - [ ] canonical decoder fuzzing
 - [ ] independent/cross-language vector
@@ -352,13 +352,13 @@ fresh-install footprint
 当前最合理的顺序：
 
 ```
-1. Genesis creation nonce
-2. merge-ready core-kernel PR
-3. persistent Event Store spike
-4. Transport abstraction + Loopback
-5. TCP Direct + Relay fallback
-6. Plugin Runtime comparison
-7. Governance vertical slice
+1. persistent Event Store spike
+2. Transport abstraction + Loopback
+3. TCP Direct + Relay fallback
+4. Plugin Runtime comparison
+5. Governance vertical slice
+6. Device revocation / key lifecycle
+7. Multi-node smoke framework
 8. Tree Host
 ```
 
