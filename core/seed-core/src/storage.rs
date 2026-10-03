@@ -52,11 +52,45 @@ pub enum StorageError {
         offset: u64,
         id: EventId,
     },
+    #[cfg(feature = "sqlite-storage")]
+    Sqlite(rusqlite::Error),
+    #[cfg(feature = "sqlite-storage")]
+    UnsupportedSqliteSchemaVersion {
+        found: i64,
+    },
+    #[cfg(feature = "sqlite-storage")]
+    SqliteMalformedRow {
+        ordinal: i64,
+    },
+    #[cfg(feature = "sqlite-storage")]
+    SqliteEventDecode {
+        ordinal: i64,
+        error: EventDecodeError,
+    },
+    #[cfg(feature = "sqlite-storage")]
+    SqliteEventIdMismatch {
+        ordinal: i64,
+    },
+    #[cfg(feature = "sqlite-storage")]
+    SqliteSpaceIndexMismatch {
+        ordinal: i64,
+    },
+    #[cfg(feature = "sqlite-storage")]
+    SqliteEventCollision {
+        id: EventId,
+    },
 }
 
 impl From<io::Error> for StorageError {
     fn from(error: io::Error) -> Self {
         Self::Io(error)
+    }
+}
+
+#[cfg(feature = "sqlite-storage")]
+impl From<rusqlite::Error> for StorageError {
+    fn from(error: rusqlite::Error) -> Self {
+        Self::Sqlite(error)
     }
 }
 
