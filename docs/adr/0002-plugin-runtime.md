@@ -105,6 +105,9 @@ embedded runtime path adds approximately **918,752 bytes**. The integrated
 binary therefore uses about **60.8%** of the current 2 MiB target, leaving
 **822,776 bytes** before that reference ceiling.
 
+CI also proves that malformed modules are rejected and that a valid plugin
+cannot execute with a zero fuel budget.
+
 This is enough evidence to keep testing the WASM path, but not enough to accept
 it: memory limits, host-call permissions, plugin storage, and platform behavior
 are still unresolved.
@@ -112,8 +115,6 @@ are still unresolved.
 ## Evidence required before Accepted
 
 - linked release size for the minimal validated/fuel-metered host;
-- malformed module rejection test;
-- out-of-fuel trap test;
 - memory growth limit test;
 - first real capability host call;
 - scoped plugin storage proof;
