@@ -26,6 +26,8 @@ PR #1 已 squash 合并到 `main`，第一批 Core Kernel 实现和 CI 测量已
 - canonical plugin ordering；
 - deterministic protocol vector；
 - append-only in-memory Event Store；
+- std-only append-only FileEventStore baseline；
+- reopen indexing / duplicate suppression / partial-tail recovery；
 - release-size CI。
 
 ### 当前 size baseline
@@ -38,12 +40,13 @@ Linux x86_64 release / stripped：
 | identity + signing/event | 376,320 B / 367.5 KiB |
 | + Genesis canonical state machine | 389,816 B / 380.7 KiB |
 | + explicit 128-bit creation nonce | 389,992 B / 380.9 KiB |
+| persistent file-store smoke | 398,904 B / 389.6 KiB |
 
 这说明 Identity + signing + Event + Genesis 目前没有威胁 2 MiB 目标。
 
-真正的 size risk 仍然是：
+persistent storage 的第一轮 std-only baseline 只增加约 8.7 KiB；真正未收敛的 size risk 现在主要是：
 
-- persistent storage；
+- SQLite（如果最终需要）；
 - transport；
 - plugin runtime。
 
@@ -90,21 +93,27 @@ Linux x86_64 release / stripped：
 
 ### A3 Persistent storage
 
-**TODO**
+**PARTIAL — append-file baseline merged in PR #3**
 
-比较：
+已完成：
 
-- SQLite；
-- append-only file + index。
+- canonical Event durable record；
+- std-only append-only file + in-memory index；
+- duplicate suppression across reopen；
+- interrupted final record recovery；
+- partial header repair；
+- completed-record corruption rejection；
+- dedicated storage smoke binary；
+- measured size delta ~8.7 KiB。
 
-记录：
+仍需比较：
 
-- binary delta；
-- append throughput；
-- recovery；
+- SQLite adapter；
+- append throughput / batch durability；
 - file/db size；
 - recent-history query；
-- 10k / 100k event rebuild。
+- 10k / 100k / 1M event reopen/rebuild；
+- crash fault injection。
 
 ---
 
@@ -352,7 +361,7 @@ fresh-install footprint
 当前最合理的顺序：
 
 ```
-1. persistent Event Store spike
+1. persistent storage scale benchmark + SQLite comparison
 2. Transport abstraction + Loopback
 3. TCP Direct + Relay fallback
 4. Plugin Runtime comparison
