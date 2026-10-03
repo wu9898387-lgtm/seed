@@ -1,11 +1,20 @@
 use crate::{
+    codec::{DecodeError, Decoder, EncodeError as CodecEncodeError, Encoder},
     crypto::{hash32, verify_strict, CryptoError, Signature},
     id::{DeviceId, EventId, IdentityId, SpaceId},
     identity::{DeviceAuthorization, DeviceIdentity, IdentityDocument, IdentityError},
+    PROTOCOL_VERSION,
 };
 
+const EVENT_WIRE_MAGIC: &[u8; 4] = b"SEVT";
+const EVENT_WIRE_VERSION: u16 = 1;
 const EVENT_SIGNATURE_DOMAIN: &[u8] = b"seed:event-signature:v1\0";
 const EVENT_ID_DOMAIN: &[u8] = b"seed:event-id:v1\0";
+
+pub const MAX_EVENT_SCHEMA_BYTES: usize = 4 * 1024;
+pub const MAX_EVENT_PAYLOAD_BYTES: usize = 1024 * 1024;
+const MAX_EVENT_UNSIGNED_BYTES: usize = 2 * 1024 * 1024;
+pub const MAX_EVENT_WIRE_BYTES: usize = 2 * 1024 * 1024;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EventHeader {
@@ -29,6 +38,9 @@ pub struct Event {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EncodeError {
     FieldTooLarge,
+    SchemaTooLarge,
+    PayloadTooLarge,
+    BodyTooLarge,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,6 +48,21 @@ pub enum EventBuildError {
     Encode(EncodeError),
     Identity(IdentityError),
     ActorMismatch,
+    UnsupportedProtocolVersion,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EventDecodeError {
+    UnexpectedEof,
+    TrailingBytes,
+    InvalidMagic,
+    UnsupportedWireVersion,
+    UnsupportedProtocolVersion,
+    InvalidUtf8,
+    SchemaTooLarge,
+    PayloadTooLarge,
+    BodyTooLarge,
+    NonCanonicalEncoding,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,6 +71,7 @@ pub enum EventVerifyError {
     Identity(IdentityError),
     ActorMismatch,
     IdMismatch,
+    UnsupportedProtocolVersion,
     Crypto(CryptoError),
 }
 
@@ -55,6 +83,10 @@ impl Event {
         header: EventHeader,
         payload: Vec<u8>,
     ) -> Result<Self, EventBuildError> {
+        if header.protocol_version != PROTOCOL_VERSION {
+            return Err(EventBuildError::UnsupportedProtocolVersion);
+        }
+
         authorization
             .verify_against(identity)
             .map_err(EventBuildError::Identity)?;
@@ -96,11 +128,77 @@ impl Event {
         &self.signature
     }
 
-    /// Deterministic internal framing for signatures/tests during Phase 1.
+    /// Deterministic signed Event body.
     ///
-    /// This is not yet the frozen Seed wire format.
+    /// This remains the bytes covered by the Event signature and EventId.
     pub fn canonical_unsigned_bytes(&self) -> Result<Vec<u8>, EncodeError> {
         canonical_unsigned_bytes(&self.header, &self.payload)
+    }
+
+    /// Deterministic Event wire record used by durable storage and transport spikes.
+    ///
+    /// The wire wrapper does not change the signed Event body or EventId.
+    pub fn canonical_bytes(&self) -> Result<Vec<u8>, EncodeError> {
+        let unsigned = self.canonical_unsigned_bytes()?;
+        if unsigned.len() > MAX_EVENT_UNSIGNED_BYTES {
+            return Err(EncodeError::BodyTooLarge);
+        }
+
+        let mut encoder = Encoder::with_capacity(4 + 2 + 4 + unsigned.len() + 64);
+        encoder.fixed(EVENT_WIRE_MAGIC);
+        encoder.u16(EVENT_WIRE_VERSION);
+        encoder.bytes(&unsigned).map_err(map_encode_error)?;
+        encoder.fixed(self.signature.as_bytes());
+        let bytes = encoder.finish();
+
+        if bytes.len() > MAX_EVENT_WIRE_BYTES {
+            return Err(EncodeError::BodyTooLarge);
+        }
+
+        Ok(bytes)
+    }
+
+    pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, EventDecodeError> {
+        if bytes.len() > MAX_EVENT_WIRE_BYTES {
+            return Err(EventDecodeError::BodyTooLarge);
+        }
+
+        let mut decoder = Decoder::new(bytes);
+        let magic: [u8; 4] = decoder.fixed().map_err(map_decode_error)?;
+        if &magic != EVENT_WIRE_MAGIC {
+            return Err(EventDecodeError::InvalidMagic);
+        }
+
+        let wire_version = decoder.u16().map_err(map_decode_error)?;
+        if wire_version != EVENT_WIRE_VERSION {
+            return Err(EventDecodeError::UnsupportedWireVersion);
+        }
+
+        let unsigned = decoder.bytes().map_err(map_decode_error)?;
+        if unsigned.len() > MAX_EVENT_UNSIGNED_BYTES {
+            return Err(EventDecodeError::BodyTooLarge);
+        }
+
+        let signature = Signature::from_bytes(decoder.fixed().map_err(map_decode_error)?);
+        decoder.finish().map_err(map_decode_error)?;
+
+        let (header, payload) = decode_unsigned(unsigned)?;
+        let id = derive_event_id(unsigned, &signature);
+        let event = Self {
+            id,
+            header,
+            payload,
+            signature,
+        };
+
+        let reencoded = event
+            .canonical_bytes()
+            .map_err(|_| EventDecodeError::NonCanonicalEncoding)?;
+        if reencoded != bytes {
+            return Err(EventDecodeError::NonCanonicalEncoding);
+        }
+
+        Ok(event)
     }
 
     pub fn verify(
@@ -108,6 +206,10 @@ impl Event {
         identity: &IdentityDocument,
         authorization: &DeviceAuthorization,
     ) -> Result<(), EventVerifyError> {
+        if self.header.protocol_version != PROTOCOL_VERSION {
+            return Err(EventVerifyError::UnsupportedProtocolVersion);
+        }
+
         authorization
             .verify_against(identity)
             .map_err(EventVerifyError::Identity)?;
@@ -135,16 +237,75 @@ impl Event {
 }
 
 fn canonical_unsigned_bytes(header: &EventHeader, payload: &[u8]) -> Result<Vec<u8>, EncodeError> {
-    let mut out = Vec::with_capacity(160 + header.schema.len() + payload.len());
-    out.extend_from_slice(&header.protocol_version.to_be_bytes());
-    out.extend_from_slice(header.space.as_bytes());
-    out.extend_from_slice(header.author.as_bytes());
-    out.extend_from_slice(header.device.as_bytes());
-    out.extend_from_slice(&header.sequence.to_be_bytes());
-    out.extend_from_slice(&header.timestamp_ms.to_be_bytes());
-    push_len_prefixed(&mut out, header.schema.as_bytes())?;
-    push_len_prefixed(&mut out, payload)?;
-    Ok(out)
+    if header.schema.len() > MAX_EVENT_SCHEMA_BYTES {
+        return Err(EncodeError::SchemaTooLarge);
+    }
+    if payload.len() > MAX_EVENT_PAYLOAD_BYTES {
+        return Err(EncodeError::PayloadTooLarge);
+    }
+
+    let mut encoder = Encoder::with_capacity(128 + header.schema.len() + payload.len());
+    encoder.u16(header.protocol_version);
+    encoder.fixed(header.space.as_bytes());
+    encoder.fixed(header.author.as_bytes());
+    encoder.fixed(header.device.as_bytes());
+    encoder.u64(header.sequence);
+    encoder.i64(header.timestamp_ms);
+    encoder
+        .bytes(header.schema.as_bytes())
+        .map_err(map_encode_error)?;
+    encoder.bytes(payload).map_err(map_encode_error)?;
+    let bytes = encoder.finish();
+
+    if bytes.len() > MAX_EVENT_UNSIGNED_BYTES {
+        return Err(EncodeError::BodyTooLarge);
+    }
+
+    Ok(bytes)
+}
+
+fn decode_unsigned(bytes: &[u8]) -> Result<(EventHeader, Vec<u8>), EventDecodeError> {
+    let mut decoder = Decoder::new(bytes);
+
+    let protocol_version = decoder.u16().map_err(map_decode_error)?;
+    if protocol_version != PROTOCOL_VERSION {
+        return Err(EventDecodeError::UnsupportedProtocolVersion);
+    }
+
+    let space = SpaceId::from_bytes(decoder.fixed().map_err(map_decode_error)?);
+    let author = IdentityId::from_bytes(decoder.fixed().map_err(map_decode_error)?);
+    let device = DeviceId::from_bytes(decoder.fixed().map_err(map_decode_error)?);
+    let sequence = decoder.u64().map_err(map_decode_error)?;
+    let timestamp_ms = decoder.i64().map_err(map_decode_error)?;
+
+    let schema_bytes = decoder.bytes().map_err(map_decode_error)?;
+    if schema_bytes.len() > MAX_EVENT_SCHEMA_BYTES {
+        return Err(EventDecodeError::SchemaTooLarge);
+    }
+    let schema = core::str::from_utf8(schema_bytes)
+        .map_err(|_| EventDecodeError::InvalidUtf8)?
+        .to_owned();
+
+    let payload = decoder.bytes().map_err(map_decode_error)?;
+    if payload.len() > MAX_EVENT_PAYLOAD_BYTES {
+        return Err(EventDecodeError::PayloadTooLarge);
+    }
+    let payload = payload.to_vec();
+
+    decoder.finish().map_err(map_decode_error)?;
+
+    Ok((
+        EventHeader {
+            protocol_version,
+            space,
+            author,
+            device,
+            sequence,
+            timestamp_ms,
+            schema,
+        },
+        payload,
+    ))
 }
 
 fn derive_event_id(unsigned: &[u8], signature: &Signature) -> EventId {
@@ -158,11 +319,17 @@ fn domain_wrap(domain: &[u8], bytes: &[u8]) -> Vec<u8> {
     out
 }
 
-fn push_len_prefixed(out: &mut Vec<u8>, bytes: &[u8]) -> Result<(), EncodeError> {
-    let len = u32::try_from(bytes.len()).map_err(|_| EncodeError::FieldTooLarge)?;
-    out.extend_from_slice(&len.to_be_bytes());
-    out.extend_from_slice(bytes);
-    Ok(())
+fn map_encode_error(error: CodecEncodeError) -> EncodeError {
+    match error {
+        CodecEncodeError::FieldTooLarge => EncodeError::FieldTooLarge,
+    }
+}
+
+fn map_decode_error(error: DecodeError) -> EventDecodeError {
+    match error {
+        DecodeError::UnexpectedEof => EventDecodeError::UnexpectedEof,
+        DecodeError::TrailingBytes => EventDecodeError::TrailingBytes,
+    }
 }
 
 #[cfg(test)]
@@ -211,6 +378,25 @@ mod tests {
     }
 
     #[test]
+    fn canonical_event_round_trip() {
+        let (root, device, authorization, header) = fixture();
+        let event = Event::sign(
+            root.document(),
+            &authorization,
+            &device,
+            header,
+            b"hello".to_vec(),
+        )
+        .unwrap();
+
+        let bytes = event.canonical_bytes().unwrap();
+        let decoded = Event::from_canonical_bytes(&bytes).unwrap();
+
+        assert_eq!(decoded, event);
+        decoded.verify(root.document(), &authorization).unwrap();
+    }
+
+    #[test]
     fn event_id_is_deterministic_for_same_signed_content() {
         let (root, device, authorization, header) = fixture();
 
@@ -251,6 +437,55 @@ mod tests {
         assert_eq!(
             event.verify(root.document(), &authorization),
             Err(EventVerifyError::IdMismatch)
+        );
+    }
+
+    #[test]
+    fn trailing_wire_bytes_are_rejected() {
+        let (root, device, authorization, header) = fixture();
+        let event = Event::sign(
+            root.document(),
+            &authorization,
+            &device,
+            header,
+            b"hello".to_vec(),
+        )
+        .unwrap();
+
+        let mut bytes = event.canonical_bytes().unwrap();
+        bytes.push(0);
+
+        assert_eq!(
+            Event::from_canonical_bytes(&bytes),
+            Err(EventDecodeError::TrailingBytes)
+        );
+    }
+
+    #[test]
+    fn unsupported_protocol_version_is_rejected_at_build() {
+        let (root, device, authorization, mut header) = fixture();
+        header.protocol_version = PROTOCOL_VERSION + 1;
+
+        assert_eq!(
+            Event::sign(
+                root.document(),
+                &authorization,
+                &device,
+                header,
+                b"hello".to_vec(),
+            ),
+            Err(EventBuildError::UnsupportedProtocolVersion)
+        );
+    }
+
+    #[test]
+    fn oversized_payload_is_rejected() {
+        let (root, device, authorization, header) = fixture();
+        let payload = vec![0; MAX_EVENT_PAYLOAD_BYTES + 1];
+
+        assert_eq!(
+            Event::sign(root.document(), &authorization, &device, header, payload),
+            Err(EventBuildError::Encode(EncodeError::PayloadTooLarge))
         );
     }
 }
