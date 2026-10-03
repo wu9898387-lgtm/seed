@@ -2,7 +2,7 @@ name: core-ci
 
 on:
   push:
-    branches: [main, core-kernel-spike, transport-spike]
+    branches: [main]
   pull_request:
 
 permissions:
