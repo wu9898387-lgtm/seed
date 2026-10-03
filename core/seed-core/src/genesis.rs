@@ -176,8 +176,7 @@ impl GenesisDraft {
             .ok_or(GenesisDecodeError::InvalidSpaceKind)?;
 
         let creator = IdentityId::from_bytes(decoder.fixed().map_err(map_decode_error)?);
-        let creator_device =
-            DeviceId::from_bytes(decoder.fixed().map_err(map_decode_error)?);
+        let creator_device = DeviceId::from_bytes(decoder.fixed().map_err(map_decode_error)?);
         let created_at_ms = decoder.i64().map_err(map_decode_error)?;
 
         let plugin_count = decoder.u16().map_err(map_decode_error)? as usize;
@@ -313,9 +312,7 @@ impl GenesisRecord {
         let mut encoder = Encoder::with_capacity(4 + 2 + 4 + unsigned.len() + 64);
         encoder.fixed(GENESIS_WIRE_MAGIC);
         encoder.u16(GENESIS_WIRE_VERSION);
-        encoder
-            .bytes(&unsigned)
-            .map_err(map_encode_error)?;
+        encoder.bytes(&unsigned).map_err(map_encode_error)?;
         encoder.fixed(self.signature.as_bytes());
         Ok(encoder.finish())
     }
