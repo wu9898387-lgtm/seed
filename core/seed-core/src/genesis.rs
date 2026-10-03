@@ -564,8 +564,8 @@ mod tests {
 
     #[test]
     fn tampered_genesis_body_fails_signature_verification() {
-        let root = RootIdentity::generate().unwrap();
-        let device = DeviceIdentity::generate().unwrap();
+        let root = RootIdentity::from_secret_bytes([1; 32]);
+        let device = DeviceIdentity::from_secret_bytes([2; 32]);
         let authorization = root.authorize_device(&device, 1, 10);
 
         let mut draft = GenesisDraft::new(SpaceKind::Group, root.document(), &device, 11, [3; 16]);
@@ -575,11 +575,11 @@ mod tests {
             .unwrap();
 
         let mut encoded = record.canonical_bytes().unwrap();
-        let config_byte = encoded
-            .iter()
-            .position(|byte| *byte == b'o')
-            .expect("config byte");
-        encoded[config_byte] = b'x';
+        let config_offset = encoded
+            .windows(b"one".len())
+            .position(|window| window == b"one")
+            .expect("plugin config bytes");
+        encoded[config_offset] = b'x';
 
         let tampered = GenesisRecord::from_canonical_bytes(&encoded).unwrap();
         assert_eq!(
