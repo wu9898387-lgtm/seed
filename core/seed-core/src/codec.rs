@@ -6,7 +6,6 @@ pub(crate) enum EncodeError {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum DecodeError {
     UnexpectedEof,
-    InvalidUtf8,
     TrailingBytes,
 }
 
@@ -15,10 +14,6 @@ pub(crate) struct Encoder {
 }
 
 impl Encoder {
-    pub(crate) fn new() -> Self {
-        Self { bytes: Vec::new() }
-    }
-
     pub(crate) fn with_capacity(capacity: usize) -> Self {
         Self {
             bytes: Vec::with_capacity(capacity),
@@ -34,10 +29,6 @@ impl Encoder {
     }
 
     pub(crate) fn u32(&mut self, value: u32) {
-        self.bytes.extend_from_slice(&value.to_be_bytes());
-    }
-
-    pub(crate) fn u64(&mut self, value: u64) {
         self.bytes.extend_from_slice(&value.to_be_bytes());
     }
 
@@ -96,10 +87,6 @@ impl<'a> Decoder<'a> {
         Ok(u32::from_be_bytes(self.fixed()?))
     }
 
-    pub(crate) fn u64(&mut self) -> Result<u64, DecodeError> {
-        Ok(u64::from_be_bytes(self.fixed()?))
-    }
-
     pub(crate) fn i64(&mut self) -> Result<i64, DecodeError> {
         Ok(i64::from_be_bytes(self.fixed()?))
     }
@@ -113,10 +100,6 @@ impl<'a> Decoder<'a> {
     pub(crate) fn bytes(&mut self) -> Result<&'a [u8], DecodeError> {
         let len = self.u32()? as usize;
         self.take(len)
-    }
-
-    pub(crate) fn string(&mut self) -> Result<&'a str, DecodeError> {
-        core::str::from_utf8(self.bytes()?).map_err(|_| DecodeError::InvalidUtf8)
     }
 
     pub(crate) fn finish(self) -> Result<(), DecodeError> {
@@ -134,11 +117,10 @@ mod tests {
 
     #[test]
     fn primitive_round_trip() {
-        let mut encoder = Encoder::new();
+        let mut encoder = Encoder::with_capacity(32);
         encoder.u8(7);
         encoder.u16(8);
         encoder.u32(9);
-        encoder.u64(10);
         encoder.i64(-11);
         encoder.bytes(b"seed").unwrap();
 
@@ -148,7 +130,6 @@ mod tests {
         assert_eq!(decoder.u8().unwrap(), 7);
         assert_eq!(decoder.u16().unwrap(), 8);
         assert_eq!(decoder.u32().unwrap(), 9);
-        assert_eq!(decoder.u64().unwrap(), 10);
         assert_eq!(decoder.i64().unwrap(), -11);
         assert_eq!(decoder.bytes().unwrap(), b"seed");
         decoder.finish().unwrap();
