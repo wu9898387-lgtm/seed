@@ -39,6 +39,21 @@ The 2 MiB value remains a project target, not a security override. A future
 dependency that is necessary for cryptographic safety may exceed a sub-budget
 and must be evaluated explicitly rather than replaced by custom crypto.
 
+## First measured baseline
+
+GitHub Actions on Ubuntu 24.04 with Rust 1.99.0 produced:
+
+- format: pass;
+- tests: pass (1 Core unit test);
+- clippy with warnings denied: pass;
+- stripped release binary: **283,416 bytes (277 KiB)**;
+- current 2 MiB reference target: 2,097,152 bytes;
+- baseline utilization: about **13.5%** of that target.
+
+This number is intentionally only a kernel baseline. Crypto, canonical
+serialization, persistent storage, networking implementation, and plugin
+runtime are not included yet and must be measured as separate increments.
+
 ## What this spike does not decide
 
 It intentionally does not freeze:
