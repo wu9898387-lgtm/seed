@@ -27,7 +27,9 @@ pub struct SignableEvent<'a> {
 
 pub fn encoded_event_len(event: &SignableEvent<'_>) -> Result<usize, EncodeError> {
     u32::try_from(event.payload.len()).map_err(|_| EncodeError::PayloadTooLarge)?;
-    Ok(EVENT_FIXED_LEN + event.payload.len())
+    EVENT_FIXED_LEN
+        .checked_add(event.payload.len())
+        .ok_or(EncodeError::PayloadTooLarge)
 }
 
 /// Encode the Phase 0 Event signing preimage.
@@ -41,7 +43,9 @@ pub fn encode_event_for_signing(
 ) -> Result<usize, EncodeError> {
     let payload_len =
         u32::try_from(event.payload.len()).map_err(|_| EncodeError::PayloadTooLarge)?;
-    let required = EVENT_FIXED_LEN + event.payload.len();
+    let required = EVENT_FIXED_LEN
+        .checked_add(event.payload.len())
+        .ok_or(EncodeError::PayloadTooLarge)?;
 
     if output.len() < required {
         return Err(EncodeError::OutputTooSmall { required });
@@ -110,6 +114,30 @@ mod tests {
                 0x44, 0x44, 0x44, 0x00, 0x00, 0x00, 0x05, 0x68, 0x65, 0x6c, 0x6c, 0x6f,
             ]
         );
+    }
+
+    #[cfg(feature = "crypto-ed25519")]
+    #[test]
+    fn canonical_bytes_have_stable_signature() {
+        use crate::crypto::{verify_event_signature, EventSigningKey};
+
+        let event = vector_event();
+        let mut output = [0u8; 119];
+        let written = encode_event_for_signing(&event, &mut output).unwrap();
+
+        let signing_key = EventSigningKey::from_secret_bytes(&[0x11; 32]);
+        let public_key = signing_key.verifying_key_bytes();
+        let signature = signing_key.sign(&output[..written]);
+        let expected_signature = [
+            0x91, 0xd4, 0xc5, 0xb6, 0x74, 0xb0, 0x91, 0x38, 0x0a, 0x2a, 0xb2, 0x29, 0x35, 0x73,
+            0x64, 0xfe, 0x3a, 0x4e, 0x03, 0x78, 0x80, 0x38, 0xeb, 0x32, 0xd5, 0xff, 0x1d, 0xdf,
+            0x79, 0x02, 0x2c, 0xa9, 0xc0, 0xe0, 0xc9, 0x80, 0x2f, 0x4e, 0x78, 0x38, 0xe7, 0x52,
+            0xbf, 0x6b, 0xcb, 0xe2, 0x77, 0x38, 0x3e, 0xf3, 0x82, 0x6d, 0x66, 0x28, 0x07, 0x7e,
+            0x4f, 0x69, 0x6a, 0x56, 0x8f, 0xd7, 0xd8, 0x06,
+        ];
+
+        assert_eq!(signature, expected_signature);
+        assert!(verify_event_signature(&public_key, &output[..written], &signature).is_ok());
     }
 
     #[test]
