@@ -211,7 +211,7 @@ Seed 希望保持一个非常小的基础核心。
 - `seed-storage-smoke`：**420,880 B / 411.0 KiB**；
 - persistent storage linked delta：**30,552 B / 29.8 KiB**。
 
-SQLite 对照 adapter 也已完成第一轮 CI：system-linked smoke 为 **430,656 B / 420.6 KiB**（较 core +39.4 KiB），bundled smoke 为 **1,488,048 B / 1,453.2 KiB**（较 core +约 1.05 MiB）。因此 SQLite 不进入默认 Core；system-linked SQLite 保留为可选 backend，对照 append-file 的 scale/query/crash/platform 数据后再决定 ADR-0005。
+SQLite 对照 adapter 也已完成第一轮 CI：system-linked smoke 为 **430,688 B / 420.6 KiB**（较 core +39.4 KiB），bundled smoke 为 **1,488,112 B / 1,453.2 KiB**（较 core +约 1.05 MiB）。因此 SQLite 不进入默认 Core；system-linked SQLite 保留为可选 backend，对照 append-file 的 scale/query/crash/platform 数据后再决定 ADR-0005。
 
 storage comparison harness 已统一为两侧都使用 bounded Space-indexed recent-history；共享 GitHub Actions 只跑 256-event correctness smoke，10k / 100k / 1M 的选型数据必须在固定 runner / filesystem 上重复测量。forced process-kill integration test 也已进入主线：worker 在 store 仍保持打开、没有 checkpoint/clean drop 时被父进程强杀，append-file 与 SQLite WAL 都能在 reopen 后恢复全部已完成的 durable append。这个测试不等价于“任意时刻断电”，mid-write / power-loss 仍需单独验证。
 
