@@ -96,6 +96,9 @@ mod tests {
         store.append(event(1, 9));
         store.append(event(2, 8));
 
-        assert_eq!(store.events_for_space(&SpaceId::from_bytes([9; 32])).len(), 1);
+        assert_eq!(
+            store.events_for_space(&SpaceId::from_bytes([9; 32])).len(),
+            1
+        );
     }
 }
