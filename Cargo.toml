@@ -7,6 +7,7 @@ members = [
     "spikes/phase0-plugin-wasm",
     "spikes/phase0-storage-append",
     "spikes/phase0-storage-sqlite",
+    "spikes/phase0-transport",
 ]
 resolver = "2"
 
