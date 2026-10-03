@@ -80,10 +80,7 @@ fn main() {
     );
     println!("genesis_id={}", genesis.id());
     println!("space_id={}", genesis.space_id());
-    println!(
-        "genesis_signature={}",
-        hex(genesis.signature().as_bytes())
-    );
+    println!("genesis_signature={}", hex(genesis.signature().as_bytes()));
     println!(
         "genesis_bytes={}",
         hex(&genesis.canonical_bytes().expect("encode genesis"))
