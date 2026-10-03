@@ -1,0 +1,47 @@
+name: storage-scale-bench
+
+on:
+  pull_request:
+    paths:
+      - "core/seed-core/Cargo.toml"
+      - "core/seed-core/src/bin/seed-storage-bench.rs"
+      - "core/seed-core/src/storage.rs"
+      - "core/seed-core/src/sqlite_storage.rs"
+      - ".github/workflows/storage-scale-bench.yml"
+  workflow_dispatch:
+    inputs:
+      events:
+        description: Durable events per backend
+        required: true
+        default: "10000"
+        type: choice
+        options:
+          - "1000"
+          - "10000"
+          - "100000"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Comparison smoke
+        run: cargo run --quiet --release --features sqlite-storage --bin seed-storage-bench -- --events 64 --spaces 8 --recent 16
+
+  benchmark:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Durable append / reopen / recent-history comparison
+        run: |
+          cargo run --quiet --release --features sqlite-storage --bin seed-storage-bench -- \
+            --events "${{ inputs.events }}" --spaces 16 --recent 64 | tee storage-bench.txt
+          cat storage-bench.txt >> "$GITHUB_STEP_SUMMARY"
