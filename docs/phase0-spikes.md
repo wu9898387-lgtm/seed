@@ -258,26 +258,45 @@ on_load -> success
 
 ## 7. Spike E — Transport
 
-**IN PROGRESS — Loopback abstraction merged; TCP / Relay pending**
+**IN PROGRESS — raw Loopback + TCP Direct + forced Relay fallback 已验证；secure session pending**
 
-先建立统一 abstraction，再实现：
+当前 reference path：
 
 ```
 LoopbackTransport
-TcpTransport
-RelayTransport
+TcpTransport(path=Direct)
+TcpTransport(path=Relay)
+connect_direct_or_relay(...)
 ```
 
-测试：
+已验证：
 
-- direct；
-- direct failure；
-- relay fallback；
-- reconnect；
-- duplicate frame；
-- truncated frame；
-- malicious length；
-- oversized message。
+- bounded queue 双向传输与 byte preservation；
+- 上层继续通过 `dyn Transport` 使用 adapter；
+- real localhost TCP Direct 双向传输；
+- Direct connect 使用显式 timeout，失败后进入 Relay endpoint fallback；
+- canonical Event wire 经真实 TCP relay bridge 后 byte-for-byte 保持一致并可重新 verify；
+- malicious incoming length 在 allocation 前拒绝；
+- truncated TCP frame 拒绝；
+- oversized outgoing frame rejection；
+- endpoint 不进入 `TransportFrame`，上层只看到 bytes + `TransportPath`；
+- 无新增第三方依赖；
+- latest validated branch：43 个 unit tests + protocol integration，fmt/check/Clippy/storage/transport/size 全绿；
+- Linux stripped `seed-transport-smoke`：**476,488 B / 465.3 KiB**；
+- 相对 core 390,328 B 的 transport stack delta：**86,160 B / 84.1 KiB**；
+- 相对 Loopback-only smoke 404,432 B，TCP + fallback 增量约 **72,056 B / 70.4 KiB**。
+
+当前 relay smoke **故意转发 signed canonical Event bytes，而不是 ciphertext**。因此这只能证明 raw transport / fallback 语义，不能宣称 Relay 已满足“只见端到端密文”。
+
+仍需：
+
+- Identity/Device authenticated session；
+- 标准化 KEX / session protocol 选型与 downgrade/MITM tests；
+- E2EE relay envelope，证明 Relay 只见 ciphertext；
+- reconnect 后上层消息语义不变；
+- duplicate/replay policy；
+- endpoint metadata 对插件的权限隔离；
+- NAT traversal / QUIC comparison。
 
 上层 Direct session 不允许依赖具体 adapter 类型。
 
@@ -387,8 +406,9 @@ fresh-install footprint
 - [ ] fixed-environment persistent storage scale comparison
 - [ ] mid-write / torn-write / real power-loss fault injection
 - [x] Loopback Transport abstraction
-- [ ] TCP / Relay Transport adapters
-- [ ] Relay fallback
+- [x] TCP Direct / Relay raw transport path
+- [x] forced Direct -> Relay fallback
+- [ ] authenticated secure session / KEX / E2EE relay envelope
 - [ ] Plugin Runtime comparison
 - [ ] Plugin sandbox escape tests
 - [ ] Governance Allow/Deny/Pending vertical slice
@@ -403,7 +423,7 @@ fresh-install footprint
 
 ```
 1. fixed-environment storage 10k / 100k / 1M repeated benchmark + mid-write / torn-write / power-loss fault injection
-2. TCP Direct + Relay fallback
+2. TCP Direct + Relay fallback — **DONE (raw transport)**
 3. Identity-authenticated secure session / KEX / E2EE，验证 Relay 只见 ciphertext envelope
 4. Plugin Runtime comparison
 5. Governance vertical slice
