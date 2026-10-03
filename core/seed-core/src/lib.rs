@@ -17,6 +17,7 @@ pub mod identity;
 pub mod plugin;
 pub mod space;
 pub mod storage;
+pub mod transport;
 
 pub const PROTOCOL_VERSION: u16 = 1;
 pub const PLUGIN_API_VERSION: u16 = 1;
