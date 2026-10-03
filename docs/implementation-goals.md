@@ -759,8 +759,11 @@ MVP 发布候选必须满足：
 - Capability DefaultDeny 已存在；
 - deterministic protocol vector 已存在；
 - release size CI 已存在；
-- Genesis + 128-bit creation nonce 后 smoke binary 实测约 380.9 KiB；
-- PR #1 已 squash 合并，Core Kernel 已进入主分支。
+- 当前 `seed-core-smoke` 实测 390,328 B / 381.2 KiB；
+- append-file `seed-storage-smoke` 实测 418,064 B / 408.3 KiB；
+- 当前 persistent storage linked delta 为 27,736 B / 27.1 KiB；
+- PR #1 已 squash 合并，Core Kernel 已进入主分支；
+- append-file storage candidate 位于 PR #5，CI full gate 已通过。
 
 下一批优先实现：
 
