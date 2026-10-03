@@ -15,7 +15,8 @@ Current scope:
 - deterministic signed Event envelope;
 - canonical signed Genesis records;
 - plugin package digest pinning inside Genesis;
-- append-only in-memory Event Store with duplicate suppression.
+- append-only in-memory Event Store with duplicate suppression;
+- experimental append-only file Event Store with reopen indexing, EventId integrity checks, and partial-tail recovery.
 
 Genesis rules in the current spike:
 
