@@ -153,7 +153,7 @@ Transport ===== untrusted network ===== Peer/Relay/Tree Host
 Mitigation：
 
 - Root Identity signature；
-- Device Certificate；
+- DeviceAuthorization；
 - signed Events；
 - fingerprint verification。
 
@@ -180,7 +180,7 @@ Mitigation：
 
 - schema；
 - signature；
-- Device cert；
+- DeviceAuthorization；
 - Governance/Capability；
 - state transition validation。
 
@@ -253,7 +253,7 @@ Mitigation：
 
 Mitigation：
 
-- SpaceId derives from GenesisBody；
+- SpaceId derives from the signed Genesis identity chain；
 - immutable genesis store；
 - all later changes use Events。
 
@@ -293,10 +293,10 @@ P2P/加密不会从技术上消除诈骗或违法行为，因此产品文案不�
 
 优先 fuzz/review：
 
-1. CBOR decoder；
+1. canonical binary decoder；
 2. handshake parser；
 3. Event validation；
-4. Device Certificate；
+4. DeviceAuthorization；
 5. Plugin Host ABI；
 6. package loader；
 7. Relay envelope；
