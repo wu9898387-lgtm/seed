@@ -7,11 +7,13 @@ use wasmi::{
 use crate::{
     capability::Capability,
     plugin::{PluginManifest, PluginPermission},
+    PLUGIN_API_VERSION,
 };
 
 pub const DEFAULT_PLUGIN_FUEL: u64 = 50_000;
 pub const DEFAULT_PLUGIN_MEMORY_BYTES: usize = 64 * 1024;
 pub const DEFAULT_PLUGIN_STATE_ENTRIES: usize = 1024;
+pub const SUPPORTED_PLUGIN_MANIFEST_VERSION: u16 = 1;
 
 pub const HOST_DENY: i32 = 0;
 pub const HOST_ALLOW: i32 = 1;
@@ -111,6 +113,13 @@ impl WasmiPluginRuntime {
         wasm: &[u8],
         fuel: u64,
     ) -> Result<WasmiPluginInstance, wasmi::Error> {
+        if manifest.manifest_version != SUPPORTED_PLUGIN_MANIFEST_VERSION {
+            return Err(wasmi::Error::new("unsupported Seed plugin manifest version"));
+        }
+        if manifest.plugin_api_version != PLUGIN_API_VERSION {
+            return Err(wasmi::Error::new("unsupported Seed plugin API version"));
+        }
+
         let module = Module::new(&self.engine, wasm)?;
         let mut store = Store::new(&self.engine, PluginHostState::new(manifest));
         store.limiter(|state| &mut state.limits);
@@ -268,6 +277,23 @@ mod tests {
                 patch: 0,
             },
         )
+    }
+
+    #[test]
+    fn incompatible_manifest_or_plugin_api_version_is_rejected() {
+        let runtime = WasmiPluginRuntime::new();
+
+        let mut unsupported_manifest = manifest();
+        unsupported_manifest.manifest_version = SUPPORTED_PLUGIN_MANIFEST_VERSION + 1;
+        assert!(runtime
+            .instantiate(unsupported_manifest, CAPABILITY_PLUGIN)
+            .is_err());
+
+        let mut unsupported_api = manifest();
+        unsupported_api.plugin_api_version = PLUGIN_API_VERSION + 1;
+        assert!(runtime
+            .instantiate(unsupported_api, CAPABILITY_PLUGIN)
+            .is_err());
     }
 
     #[test]
