@@ -20,6 +20,8 @@ pub mod space;
 pub mod sqlite_storage;
 pub mod storage;
 pub mod transport;
+#[cfg(feature = "plugin-wasmi")]
+pub mod wasm_runtime;
 
 pub const PROTOCOL_VERSION: u16 = 1;
 pub const PLUGIN_API_VERSION: u16 = 1;
