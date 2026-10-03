@@ -12,10 +12,12 @@ Current scope:
 - Root -> Device authorization records;
 - strict Ed25519 signature verification;
 - domain-separated SHA-256 Identity / Device / Genesis / Space / Event IDs;
-- deterministic signed Event envelope;
+- deterministic signed Event envelope plus bounded canonical Event wire records;
 - canonical signed Genesis records;
 - plugin package digest pinning inside Genesis;
-- append-only in-memory Event Store with duplicate suppression.
+- append-only in-memory Event Store with duplicate suppression;
+- append-only file Event Store with restart index rebuild, checksum corruption
+  detection, and explicit truncated-tail recovery.
 
 Genesis rules in the current spike:
 
@@ -31,6 +33,19 @@ Genesis rules in the current spike:
 - post-activation governance changes must eventually be represented as events,
   rather than rewriting Genesis.
 
+Storage rules in the current spike:
+
+- callers validate identity/signature/governance/state before append;
+- persistent frames store canonical Event wire bytes, not ad-hoc Rust memory
+  representations;
+- duplicate EventIds are idempotent;
+- oversized frames are rejected before allocation;
+- checksum mismatches are hard failures;
+- only an incomplete final frame may be explicitly truncated during recovery;
+- file checksums detect corruption but do not replace Device signature
+  verification;
+- append-file is a Phase-0 candidate, not yet the Accepted backend.
+
 Security choices in this spike:
 
 - Ed25519 is provided by ed25519-dalek, not a Seed-specific algorithm;
@@ -43,7 +58,7 @@ Not implemented yet:
 
 - persistent/OS-backed key storage;
 - device revocation and key rotation;
-- persistent event storage;
+- SQLite storage comparison/final persistent backend decision;
 - networking and secure sessions;
 - plugin sandbox/runtime;
 - governance execution;
