@@ -15,13 +15,13 @@ pub mod genesis;
 pub mod id;
 pub mod identity;
 pub mod plugin;
-#[cfg(feature = "plugin-wasmi")]
-pub mod wasm_runtime;
 pub mod space;
 #[cfg(feature = "sqlite-storage")]
 pub mod sqlite_storage;
 pub mod storage;
 pub mod transport;
+#[cfg(feature = "plugin-wasmi")]
+pub mod wasm_runtime;
 
 pub const PROTOCOL_VERSION: u16 = 1;
 pub const PLUGIN_API_VERSION: u16 = 1;
