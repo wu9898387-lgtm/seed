@@ -29,8 +29,9 @@ requires the result 42, and verifies that execution consumed fuel.
 
 ## What this proves
 
-If CI passes, it proves that a real WebAssembly parser/interpreter can be linked
-and invoked under a deterministic execution budget.
+CI proves that a real WebAssembly parser/interpreter can be linked and invoked
+under a deterministic execution budget. It also rejects a malformed module and
+prevents a valid module from executing when its fuel budget is zero.
 
 It does not yet prove:
 
