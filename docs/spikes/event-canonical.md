@@ -30,8 +30,8 @@ Input:
 
 Expected canonical length: **119 bytes**.
 
-The exact 119-byte array is frozen in the Core unit test rather than duplicated
-in prose.
+The Core unit test freezes every field at an exact byte offset, and a second
+test freezes an Ed25519 signature over the complete 119-byte output.
 
 ## Why not call this the final serialization format?
 
