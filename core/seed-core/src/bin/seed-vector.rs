@@ -38,7 +38,10 @@ fn main() {
     )
     .expect("event");
 
-    println!("root_public={}", hex(root.document().root_public_key().as_bytes()));
+    println!(
+        "root_public={}",
+        hex(root.document().root_public_key().as_bytes())
+    );
     println!("identity_id={}", root.document().id());
     println!("device_public={}", hex(device.public_key().as_bytes()));
     println!("device_id={}", device.id());
