@@ -132,9 +132,7 @@ impl FileEventStore {
             return Ok(AppendOutcome::Duplicate);
         }
 
-        let encoded = event
-            .canonical_bytes()
-            .map_err(StorageError::EventEncode)?;
+        let encoded = event.canonical_bytes().map_err(StorageError::EventEncode)?;
         if encoded.len() > MAX_STORED_EVENT_BYTES {
             return Err(StorageError::RecordTooLarge);
         }
@@ -190,8 +188,7 @@ impl FileEventStore {
                 return Err(StorageError::ChecksumMismatch);
             }
 
-            let event =
-                Event::from_canonical_bytes(&encoded).map_err(StorageError::EventDecode)?;
+            let event = Event::from_canonical_bytes(&encoded).map_err(StorageError::EventDecode)?;
             if !self.seen.insert(event.id()) {
                 return Err(StorageError::DuplicateRecord);
             }
@@ -270,7 +267,15 @@ mod tests {
         }
     }
 
-    fn event(sequence: u64, space: u8) -> (RootIdentity, DeviceIdentity, crate::identity::DeviceAuthorization, Event) {
+    fn event(
+        sequence: u64,
+        space: u8,
+    ) -> (
+        RootIdentity,
+        DeviceIdentity,
+        crate::identity::DeviceAuthorization,
+        Event,
+    ) {
         let root = RootIdentity::generate().unwrap();
         let device = DeviceIdentity::generate().unwrap();
         let authorization = root.authorize_device(&device, 1, 0);
@@ -328,10 +333,7 @@ mod tests {
 
         {
             let mut store = FileEventStore::open(log.path()).unwrap();
-            assert_eq!(
-                store.append(event).unwrap(),
-                AppendOutcome::Inserted
-            );
+            assert_eq!(store.append(event).unwrap(), AppendOutcome::Inserted);
             assert_eq!(store.len(), 1);
         }
 
@@ -340,9 +342,7 @@ mod tests {
         let restored = reopened.events_for_space(&SpaceId::from_bytes([9; 32]));
         assert_eq!(restored.len(), 1);
         assert_eq!(restored[0].id(), event_id);
-        restored[0]
-            .verify(root.document(), &authorization)
-            .unwrap();
+        restored[0].verify(root.document(), &authorization).unwrap();
     }
 
     #[test]
@@ -355,10 +355,7 @@ mod tests {
         assert_eq!(store.append(event).unwrap(), AppendOutcome::Inserted);
         let first_len = fs::metadata(log.path()).unwrap().len();
 
-        assert_eq!(
-            store.append(duplicate).unwrap(),
-            AppendOutcome::Duplicate
-        );
+        assert_eq!(store.append(duplicate).unwrap(), AppendOutcome::Duplicate);
         let second_len = fs::metadata(log.path()).unwrap().len();
         assert_eq!(first_len, second_len);
     }
