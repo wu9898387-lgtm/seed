@@ -4,6 +4,7 @@ members = [
     "spikes/phase0-core",
     "spikes/phase0-crypto",
     "spikes/phase0-event",
+    "spikes/phase0-plugin-wasm",
 ]
 resolver = "2"
 
