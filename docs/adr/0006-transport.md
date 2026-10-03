@@ -94,26 +94,36 @@ Seed 的密码学身份不能直接等同于 transport 自带 TLS 服务器身�
 
 ## Validation
 
-Loopback abstraction spike 已验证：
+Loopback + TCP Direct/Relay fallback 已验证：
 
 - bounded queue 双向传输与 byte preservation；
 - trait-object adapter erasure；
 - backpressure / disconnected peer；
-- oversized frame rejection；
-- canonical Event wire 穿过 transport 后仍可 decode + signature verify；
-- Linux x86_64 stripped release：`seed-transport-smoke` 404,432 B / 395.0 KiB，
-  相对 core 390,328 B / 381.2 KiB 增量 14,104 B / 13.8 KiB；
-- 无新增第三方依赖，CI fmt/check/clippy/tests/protocol/storage/transport/size 全绿。
+- `TcpTransport` 使用后台 blocking socket workers，对上层保持非阻塞 queue API；
+- real localhost TCP Direct 双向传输；
+- Direct connect failure -> Relay endpoint fallback；
+- 同一 canonical Event wire 经真实 TCP relay bridge 后 byte-for-byte 保持一致并可重新 verify；
+- oversized outgoing frame rejection；
+- malicious incoming length 在分配前拒绝；
+- truncated TCP frame 拒绝；
+- endpoint 不进入 `TransportFrame`，上层仍只看到 bytes + `TransportPath`；
+- 无新增第三方依赖；
+- CI 需在当前 main rebase 后重新通过 fmt/check/clippy/tests/protocol/storage/transport/size gate；
+- Linux x86_64 stripped release：`seed-transport-smoke` **474,696 B / 463.6 KiB**；
+- 相对 core 390,328 B / 381.2 KiB 总增量 **84,368 B / 82.4 KiB**；
+- 相对上一版 Loopback-only smoke 404,432 B，新 TCP + fallback 路径增加约 **70,264 B / 68.6 KiB**。
+
+当前 relay smoke 转发的是 signed canonical Event bytes，而不是 E2EE ciphertext，
+所以“Relay 默认只处理端到端密文”这一产品约束仍未完成验证。
 
 后续仍需：
 
-- direct connect；
-- forced direct failure -> relay fallback；
-- relay 无明文；
+- authenticated secure session / KEX；
+- relay 只见密文 envelope；
 - reconnect 后上层消息语义不变；
+- duplicate/replay frame policy；
 - endpoint metadata 不泄漏给无权限插件；
-- transport adapter 可替换；
-- malformed/truncated/oversized frame tests。
+- NAT traversal / QUIC comparison。
 
 ## Revisit conditions
 
