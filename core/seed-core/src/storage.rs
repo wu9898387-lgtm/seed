@@ -125,6 +125,7 @@ impl FileEventStore {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, StorageError> {
         let mut file = OpenOptions::new()
             .create(true)
+            .truncate(false)
             .read(true)
             .write(true)
             .open(path)?;
