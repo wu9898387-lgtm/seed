@@ -100,6 +100,16 @@ constraints become problematic.
 - at least one C or C++ baseline is measured if the Rust path approaches the
   Core size ceiling.
 
+## Current evidence
+
+The first GitHub Actions reference build passed format, unit tests, and clippy.
+The stripped Linux x86_64 seed-phase0-core binary measured **283,416 bytes
+(277 KiB)**, approximately 13.5% of the 2 MiB project target.
+
+This supports continuing the Rust spike, but it is not enough to mark this ADR
+Accepted because the dominant future costs are expected to come from crypto,
+storage, transport, and plugin sandbox/runtime choices.
+
 ## Revisit conditions
 
 Reopen this ADR if any of the following becomes true:
