@@ -205,54 +205,77 @@ PR #9 的共享 runner 曾完成一次 **10k pre-index sanity run**：Event 生�
 
 ## 6. Spike D — Plugin Runtime
 
-**TODO / major size risk**
+**IN PROGRESS — Wasmi 2.0 first candidate green; alternative comparison pending**
 
-候选至少两个 runtime。
+### D0 / D1 — Runtime + Host ABI
 
-每个 candidate：
+第一轮 candidate：
 
-### D0 Hello
+- `wasmi = 2.0.0`；
+- optional `plugin-wasmi` feature；
+- no WASI；
+- module validation；
+- fuel metering；
+- start function disabled；
+- per-plugin Store / scoped state；
+- narrow Host ABI:
+  - `capability_allowed`；
+  - `state_put`；
+  - `state_get`。
 
-```
-on_load -> success
-```
+### D2 — Resource isolation
 
-### D1 Host ABI
+已验证：
 
-实现：
+- non-terminating guest -> fuel exhaustion / trap；
+- 64 KiB linear-memory limit；
+- 128 KiB initial memory module instantiation 拒绝；
+- malformed module rejection。
 
-- scoped state get/put；
-- event subscription stub；
-- capability request stub。
+仍需：
 
-### D2 Resource isolation
+- dynamic `memory.grow` / OOM；
+- excessive host-call quota；
+- peak RSS；
+- trap 后状态事务语义。
 
-测试：
+### D3 — Permission escape
 
-- trap；
-- infinite loop；
-- memory growth；
-- OOM；
-- excessive host calls。
+已验证：
 
-### D3 Permission escape
+- undeclared capability -> deny；
+- declared `MemberRemove` evaluator permission -> allow；
+- scoped state 未声明 -> deny；
+- plugin Store state namespace 相互隔离；
+- undeclared Root private-key import -> linker reject；
+- WASI/network-like import -> linker reject。
 
-插件尝试：
+仍需：
 
-- filesystem；
-- network；
-- Root key；
-- foreign plugin state；
-- undeclared capability。
+- event subscription/emit Host ABI；
+- durable scoped plugin storage；
+- explicit filesystem/network permission adapters（如未来需要）；
+- plugin package signature / digest verification through runtime load path。
 
 ### Measure
 
-- Host stripped size delta；
-- plugin package size；
-- instantiate latency；
-- call throughput；
-- peak RSS；
-- resource limit enforcement。
+Linux x86_64 stripped：
+
+| Slice | Size |
+|---|---:|
+| default core smoke | **390,328 B / 381.2 KiB** |
+| Wasmi + Seed Host ABI smoke | **1,221,640 B / 1,193.0 KiB** |
+| runtime delta vs core | **831,312 B / 811.8 KiB** |
+| remaining to 2 MiB reference | **875,512 B** |
+
+50 个 unit tests + plugin smoke 已通过，默认 `core-ci` 同时保持绿色。
+
+下一 Gate：
+
+1. Wasmi latency/RSS/call-throughput benchmark；
+2. dynamic memory/host-call resource abuse tests；
+3. 至少一个第二 runtime 或 native out-of-process sandbox 对照；
+4. 再决定 engine，而不是现在冻结 Wasmi。
 
 ---
 
@@ -389,8 +412,8 @@ fresh-install footprint
 - [x] Loopback Transport abstraction
 - [ ] TCP / Relay Transport adapters
 - [ ] Relay fallback
-- [ ] Plugin Runtime comparison
-- [ ] Plugin sandbox escape tests
+- [ ] Plugin Runtime comparison（Wasmi candidate green；second candidate pending）
+- [x] first Plugin sandbox escape/resource tests
 - [ ] Governance Allow/Deny/Pending vertical slice
 - [ ] Multi-node smoke framework
 - [ ] Threat Model review against implementation
