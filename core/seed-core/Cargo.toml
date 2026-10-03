@@ -1,0 +1,10 @@
+[package]
+name = "seed-core"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0"
+description = "Minimal protocol kernel primitives for Seed"
+publish = false
+
+[lib]
+path = "src/lib.rs"
