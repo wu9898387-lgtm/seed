@@ -117,8 +117,8 @@ append-only file + index 候选已经进入实现：
 
 已完成第一轮 SQLite 对照：
 
-- system-linked：430,656 B / 420.6 KiB（较 core +40,328 B / 39.4 KiB）；
-- bundled：1,488,048 B / 1,453.2 KiB（较 core +1,097,720 B / 1,072.0 KiB）；
+- system-linked：430,688 B / 420.6 KiB（较 core +40,360 B / 39.4 KiB）；
+- bundled：1,488,112 B / 1,453.2 KiB（较 core +1,097,784 B / 1,072.1 KiB）；
 - reopen / duplicate suppression / corrupted row rejection / Space recent-history index smoke 通过；
 - SQLite 保持 optional feature，不进入默认 Core。
 
@@ -130,6 +130,9 @@ append-only file + index 候选已经进入实现：
 - 输出 durable append、reopen/rebuild、recent-history query 与 persisted bytes；
 - PR CI 只跑 256 events correctness smoke，共享 runner wall clock 不作为 backend 性能结论；
 - 10k / 100k / 1M 决策数据必须在固定 runner / filesystem 上重复执行，并记录环境与多次样本。
+
+PR #9 的共享 runner 曾完成一次 **10k pre-index sanity run**：Event 生成 55,394 ms（单独计时）；append-file append 3,436 ms / reopen 24 ms / 2,850,008 B；SQLite append 2,345 ms / reopen 12 ms / 4,378,624 B。该结果只证明 10k harness 可运行，不用于 backend 选择；query 当时尚未统一为 indexed recent-history。
+
 
 仍需记录：
 
