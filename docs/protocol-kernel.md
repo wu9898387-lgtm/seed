@@ -47,6 +47,8 @@
 - set-like collection 必须有明确 canonical sort；
 - Genesis plugins 按 PluginId 排序；
 - duplicate PluginId 非法；
+- Genesis 与 Event 都有 deterministic decode/re-encode path；
+- Event wire wrapper 使用独立 wire version，不改变 signed unsigned-Event bytes 或 EventId；
 - decoder 拒绝 trailing bytes、unsupported version、invalid enum、oversized input 和 non-canonical order；
 - hash/signature 使用 domain separation。
 
@@ -253,6 +255,28 @@ EventId = SHA-256(
 
 Device signature 覆盖 domain-separated canonical unsigned Event。
 
+当前 Event 另外提供 deterministic wire record：
+
+```text
+"SEVT"
+u16 wire_version = 1
+u32 unsigned_event_length
+canonical_unsigned_event
+64-byte Device signature
+```
+
+这个 wrapper 用于持久化与后续 transport framing。EventId 仍然只由
+`canonical_unsigned_event || device_signature` 导出，因此新增 wire wrapper
+没有重定义现有 EventId。
+
+当前 decoder 还设置了显式资源上限：
+
+- Event schema <= 4 KiB；
+- Event payload <= 1 MiB；
+- Event wire record <= 2 MiB。
+
+大附件不应直接进入 Event payload，而应通过受验证的引用表达。
+
 `timestamp_ms` 不能单独作为授权依据。
 
 ---
@@ -341,7 +365,34 @@ Genesis 已经通过 package digest 固定插件内容。
 
 ## 12. Storage semantics
 
-当前 Spike 有 append-only in-memory Event Store 和 content-derived duplicate suppression。
+当前 Spike 同时有：
+
+- append-only in-memory Event Store；
+- append-only file Event Store candidate；
+- content-derived EventId duplicate suppression；
+- restart 时顺序扫描并重建 in-memory index；
+- frame checksum corruption detection；
+- strict truncated-tail rejection；
+- 显式 final-tail recovery。
+
+append-file 当前 record：
+
+```text
+"SEEDLOG1"
+repeat {
+  u32 event_length
+  32-byte domain-separated checksum
+  canonical Event wire bytes
+}
+```
+
+checksum 用于本地 corruption detection，不是 authenticity primitive。真正的
+Event authenticity 仍由 Device signature 与正常 acceptance/rebuild pipeline
+验证。
+
+recovery 的原则是：**只允许显式修掉不完整的最终 frame**。checksum mismatch、
+invalid Event wire、oversized frame 或中间损坏都必须作为 hard failure，而不是
+“尽量跳过去”。
 
 长期目标：
 
@@ -350,7 +401,9 @@ Validated Event Log = authoritative accepted history
 Materialized View    = rebuildable current state
 ```
 
-持久化 backend 尚未决定。
+持久化 backend 仍未 Accepted。append-file 只是 ADR-0005 的第一个可运行候选，
+下一步仍需 SQLite 同条件对照、10k/100k rebuild、throughput、query 与 crash
+recovery 测量。
 
 ---
 
