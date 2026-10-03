@@ -23,6 +23,20 @@ forbids `unsafe` code so that baseline binary size and architecture can be
 measured before crypto, storage, networking, or plugin-runtime dependencies are
 introduced.
 
+## Initial measurement
+
+GitHub Actions baseline on 2026-10-03:
+
+- host: `x86_64-unknown-linux-gnu`;
+- compiler: `rustc 1.99.0`;
+- release profile: `opt-level=z`, fat LTO, one codegen unit, `panic=abort`,
+  stripped symbols;
+- smoke binary: **282,648 bytes (276.0 KiB)**;
+- unit tests: **6 passed, 0 failed**.
+
+This number is only a lower-bound baseline. It does not yet include a production
+crypto backend, persistent storage, transport, or plugin runtime.
+
 ## Consequences
 
 Positive:
