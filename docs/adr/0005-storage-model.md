@@ -1,6 +1,6 @@
 # ADR-0005: Validated Event Log 为权威历史，Materialized View 为可重建状态
 
-- Status: Provisional
+- Status: Proposed
 - Date: 2026-10-03
 - Decision scope: Storage / Sync / Tree Host
 
@@ -16,7 +16,9 @@ Seed 需要同时支持：
 - Tree Host 持久化；
 - 插件状态。
 
-当前 `main` 已包含 append-only in-memory Event Store，以及 PR #3 合并的 std-only append-only file baseline、partial-tail recovery 与 partial-header repair。
+当前 Core 已经有 append-only in-memory Event Store 与 duplicate suppression。
+Phase 0 现在进一步加入了一个 append-only file 候选，用于验证持久化、恢复与体积；
+它仍然不是最终 backend 决策。
 
 如果只同步“当前数据库表”，很难证明状态变化过程，也难以正确验证治理历史。
 
@@ -50,48 +52,71 @@ get_plugin_state()
 checkpoint()
 ```
 
+当前最小 Rust interface 只覆盖 Event append / dedup / scan / checkpoint；
+Genesis 与 plugin state persistence 仍待后续扩展。
+
+## Phase-0 append-file candidate
+
+当前候选文件格式：
+
+```text
+"SEEDLOG1"
+repeat {
+  event_len: u32 big-endian
+  checksum: 32-byte SHA-256(
+    "seed:event-store-frame:v1\0" || canonical_event_bytes
+  )
+  canonical_event_bytes
+}
+```
+
+其中 `canonical_event_bytes` 是 Event 自身带 wire version 的 deterministic
+record；文件 backend 不序列化 Rust struct 内存布局。
+
+当前实现约束：
+
+- duplicate EventId 不重复写入；
+- 启动时顺序扫描并重建 in-memory index；
+- frame length 在分配 payload buffer 前验证；
+- Event wire decode 也有 schema/payload/body 上限；
+- checksum mismatch 是 hard failure；
+- 非 canonical / invalid Event wire 是 hard failure；
+- 已完整写入的重复 Event frame 是 hard failure；
+- 默认不自动修剪任何损坏；
+- 显式 recovery API 只允许删除**不完整的最终 frame**；
+- append 成功前执行 `sync_data`；
+- file checksum 只用于 corruption detection，不替代 Device signature authenticity。
+
+这组规则的目标是避免“为了恢复而悄悄吞掉中间损坏”。
+
 ## MVP backend
 
-持久化 backend 尚未 Accepted，但 append-only file baseline 已完成第一轮 Spike，并已合并到 `main`。
+持久化 backend 尚未 Accepted。
 
-### Append-only file baseline
-
-当前实现：
-
-- 不新增第三方依赖；
-- versioned log header；
-- length-prefixed canonical Event record；
-- persisted EventId integrity check；
-- reopen 时重建 in-memory index；
-- duplicate suppression；
-- interrupted final record 自动截断到最后完整记录；
-- completed-record corruption 返回错误，不静默跳过；
-- 每次 append 当前调用 flush + sync_data，优先验证 durability 语义。
-
-同一 CI 构建下：
-
-- seed-core-smoke：389,976 B / 380.8 KiB；
-- seed-storage-smoke：398,904 B / 389.6 KiB；
-- persistent file storage path 增量：8,928 B / ~8.7 KiB。
-
-这说明文件日志在二进制体积上非常便宜，但仍未证明它在大历史、索引和查询方面优于 SQLite。
-
-### 仍需比较
+Phase 0 仍需比较：
 
 - SQLite adapter；
-- 10k / 100k / 1M Event reopen/rebuild；
-- batch durability；
-- random recent-history query；
-- concurrent reader / writer needs；
-- crash fault injection。
+- append-only file + index。
 
-优先正确性、crash recovery、跨平台与体积，不为了节省少量体积自行实现一个脆弱数据库。
+append-file 候选的价值是提供一个**零新增依赖**、可测量的下界；
+它不能仅凭体积更小就自动胜出。
+
+最终选择优先：
+
+- 正确性；
+- crash recovery；
+- 跨平台；
+- 查询需求；
+- 维护风险；
+- 体积。
+
+不要为了节省少量体积自行实现一个脆弱数据库。
 
 ## Blob / Attachment
 
 大附件不直接塞入 Event Log。
 
-Event 只保存受验证的引用信息，例如：
+当前 Event payload 有明确上限；大对象应只保存受验证的引用信息，例如：
 
 - content hash；
 - size；
@@ -123,18 +148,49 @@ Event 只保存受验证的引用信息，例如：
 - MVP 复杂度过高；
 - Group / Tree / Governance 的需求并不全部等同于协作文档。
 
+### Append-only file 直接 Accepted
+
+当前拒绝提前做这个决定。
+
+原因：
+
+- 还没有 10k / 100k rebuild 数据；
+- recent-history query 尚未优化；
+- compaction / index lifecycle 尚未设计；
+- SQLite 对 crash consistency、query/index、跨平台工具链可能更有优势；
+- Tree Host 与桌面客户端可能最终需要不同 adapter。
+
 ## Validation
 
-- crash / kill recovery；
+append-file 候选已经覆盖/正在覆盖：
+
 - duplicate event idempotency；
-- invalid event 不进入 accepted history/materialized state；
+- restart 后 index rebuild；
+- canonical Event decode/re-encode；
+- oversized frame rejection before allocation；
+- corrupted checksum rejection；
+- truncated tail strict rejection；
+- explicit final-tail recovery；
+- release binary size delta：`seed-core-smoke` 390,328 B / 381.2 KiB，
+  `seed-storage-smoke` 418,064 B / 408.3 KiB，delta 27,736 B / 27.1 KiB；
+- CI full gate（fmt/check/clippy/tests/protocol smoke/storage smoke/size）通过。
+
+仍需：
+
+- process kill / power-loss style recovery；
+- invalid event 不进入 accepted history/materialized state 的完整 acceptance pipeline；
 - rebuild 与在线 materialization 结果一致；
-- 10k / 100k event 基线；
-- storage binary-size contribution；
-- corrupted tail / partial write tests。
+- 10k / 100k event rebuild；
+- append throughput；
+- recent-history query；
+- file size；
+- SQLite 同条件对照；
+- desktop / Tree Host platform checks。
 
 ## Revisit conditions
 
 - 多设备并发需求证明当前 Event 模型不足；
 - 特定 Space 类型需要独立 CRDT；
-- backend 在移动端或 Tree Host 上无法满足可靠性/体积目标。
+- backend 在移动端或 Tree Host 上无法满足可靠性/体积目标；
+- append-file index/rebuild 成本随着真实历史规模失控；
+- SQLite 或其他系统 backend 在体积预算内显著降低正确性与维护风险。

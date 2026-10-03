@@ -70,6 +70,8 @@ fn identity_genesis_event_vector_v2() {
         b"hello".to_vec(),
     )
     .unwrap();
+    let event_bytes = event.canonical_bytes().unwrap();
+    let decoded_event = Event::from_canonical_bytes(&event_bytes).unwrap();
 
     assert_eq!(
         hex(root.document().root_public_key().as_bytes()),
@@ -115,9 +117,15 @@ fn identity_genesis_event_vector_v2() {
         hex(event.signature().as_bytes()),
         "ffe70b44a079531fa750e4c94004cab15ce4385cf01c5641b5d4eabeb75620ac15e2f9c98bccd5c4d149a9909156436e2730a9b2dd40cb4245d8fd70ff13df0d"
     );
+    assert_eq!(
+        hex(&event_bytes),
+        "534556540001000000930001ccebbe4515777718143f6fc51b37c4412366b08c4c73757a92668fb276b8680600524173a9a0f74fe50a3ffde32c2c8cf013c734a39ae7847fb56fd98ddefdb973c192ef5ee4e3f2e1815f48f09cf8f3d8d958d6e347aa07b456389e03554c4a00000000000000070000018bcfe5687b00000014736565642e6d6573736167652e746578742f76310000000568656c6c6fffe70b44a079531fa750e4c94004cab15ce4385cf01c5641b5d4eabeb75620ac15e2f9c98bccd5c4d149a9909156436e2730a9b2dd40cb4245d8fd70ff13df0d"
+    );
 
     decoded_genesis
         .verify(root.document(), &authorization)
         .unwrap();
-    event.verify(root.document(), &authorization).unwrap();
+    decoded_event
+        .verify(root.document(), &authorization)
+        .unwrap();
 }

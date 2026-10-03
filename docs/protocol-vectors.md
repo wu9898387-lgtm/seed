@@ -8,6 +8,10 @@ to validate the current Identity -> DeviceAuthorization -> Genesis -> Event path
 Vector v1 was superseded when Genesis gained an explicit creation nonce. The
 wire/schema version was bumped rather than silently redefining the old bytes.
 
+The Event wire wrapper added during the persistent-storage spike does not change
+the signed unsigned-Event bytes, Device signature, or EventId. It is pinned here
+as an additional v2 output.
+
 ## Vector v2 inputs
 
 Identity and device:
@@ -32,6 +36,7 @@ Genesis:
 Event:
 
 - Event protocol version: 1
+- Event wire version: 1
 - Event sequence: 7
 - Event timestamp_ms: 1700000000123
 - Event schema: seed.message.text/v1
@@ -84,6 +89,26 @@ Event Device signature:
 
 ffe70b44a079531fa750e4c94004cab15ce4385cf01c5641b5d4eabeb75620ac15e2f9c98bccd5c4d149a9909156436e2730a9b2dd40cb4245d8fd70ff13df0d
 
+Canonical Event wire bytes:
+
+534556540001000000930001ccebbe4515777718143f6fc51b37c4412366b08c4c73757a92668fb276b8680600524173a9a0f74fe50a3ffde32c2c8cf013c734a39ae7847fb56fd98ddefdb973c192ef5ee4e3f2e1815f48f09cf8f3d8d958d6e347aa07b456389e03554c4a00000000000000070000018bcfe5687b00000014736565642e6d6573736167652e746578742f76310000000568656c6c6fffe70b44a079531fa750e4c94004cab15ce4385cf01c5641b5d4eabeb75620ac15e2f9c98bccd5c4d149a9909156436e2730a9b2dd40cb4245d8fd70ff13df0d
+
+## Event wire framing
+
+The current Event wire wrapper is:
+
+```text
+"SEVT"
+u16 wire_version = 1
+u32 unsigned_event_length
+canonical_unsigned_event
+64-byte Device signature
+```
+
+The wrapper is for deterministic decode/re-encode, durable storage, and later
+transport framing. EventId still derives from the canonical unsigned Event plus
+Device signature, so introducing this wrapper does not redefine EventId.
+
 ## Domain separation
 
 Current namespaces remain:
@@ -97,7 +122,13 @@ Current namespaces remain:
 - seed:event-signature:v1 followed by a NUL byte
 - seed:event-id:v1 followed by a NUL byte
 
-Genesis schema/wire versioning is independent from these object-domain labels.
+The append-only file store additionally uses
+`seed:event-store-frame:v1\0` for corruption-detection frame checksums. That
+checksum is not an authenticity primitive and does not replace Device signature
+verification.
+
+Genesis schema/wire versioning and Event wire versioning are independent from
+these object-domain labels.
 
 The canonical format remains provisional until the protocol is frozen. Any
 future incompatible framing change must version-bump rather than silently

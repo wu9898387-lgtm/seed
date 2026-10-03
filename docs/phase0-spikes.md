@@ -7,7 +7,7 @@
 
 ## 1. 已有证据
 
-PR #1 已 squash 合并到 `main`，第一批 Core Kernel 实现和 CI 测量已经成为主分支基线。
+PR #1 已 squash 合并到 `main`；PR #3 的 std-only persistent FileEventStore baseline 也已进入 `main`。当前分支是在该主线基线上继续强化 Event wire、corruption detection、显式 tail recovery 与可重复 CI 测量。
 
 当前已验证：
 
@@ -25,9 +25,10 @@ PR #1 已 squash 合并到 `main`，第一批 Core Kernel 实现和 CI 测量已
 - Genesis plugin digest pinning；
 - canonical plugin ordering；
 - deterministic protocol vector；
+- canonical Event wire encode/decode；
 - append-only in-memory Event Store；
-- std-only append-only FileEventStore baseline；
-- reopen indexing / duplicate suppression / partial-tail recovery；
+- PR #3 已合并的 std-only append-only FileEventStore baseline；
+- 当前强化候选的 bounded Event wire、restart index rebuild、frame checksum corruption detection 与 explicit tail recovery；
 - release-size CI。
 
 ### 当前 size baseline
@@ -40,13 +41,17 @@ Linux x86_64 release / stripped：
 | identity + signing/event | 376,320 B / 367.5 KiB |
 | + Genesis canonical state machine | 389,816 B / 380.7 KiB |
 | + explicit 128-bit creation nonce | 389,992 B / 380.9 KiB |
-| persistent file-store smoke | 398,904 B / 389.6 KiB |
+| PR #3 persistent file-store baseline | 398,904 B / 389.6 KiB |
+| current core smoke（含 bounded Event wire） | 390,328 B / 381.2 KiB |
+| current hardened storage smoke | 418,064 B / 408.3 KiB |
 
-这说明 Identity + signing + Event + Genesis 目前没有威胁 2 MiB 目标。
+同一 CI commit 下，`seed-storage-smoke` 相对 `seed-core-smoke` 的链接后增量为 **27,736 B / 27.1 KiB**。
+这不是最终数据库占用或历史数据文件大小，只是当前 persistent storage code path 的 release binary delta。
 
-persistent storage 的第一轮 std-only baseline 只增加约 8.7 KiB；真正未收敛的 size risk 现在主要是：
+Identity + signing + Event + Genesis + 第一版 append-file storage 仍远低于 2 MiB。
+当前真正的 size risk 更集中在：
 
-- SQLite（如果最终需要）；
+- SQLite 等替代 storage backend；
 - transport；
 - plugin runtime。
 
@@ -61,9 +66,10 @@ persistent storage 的第一轮 std-only baseline 只增加约 8.7 KiB；真正�
 - Clippy with `-D warnings`；
 - tests；
 - protocol vector smoke；
-- release size。
+- persistent storage smoke；
+- release size（core + storage candidate delta）。
 
-最新检查已恢复为绿色。
+最新完整检查为绿色：31 个 unit tests + 1 个 protocol-vector integration test 通过，且 `seed-storage-smoke` 已实际执行 append -> checkpoint -> reopen/index recovery。
 
 任何 Phase 0 代码都不应通过关闭 warning gate 来“修 CI”。
 
@@ -93,27 +99,38 @@ persistent storage 的第一轮 std-only baseline 只增加约 8.7 KiB；真正�
 
 ### A3 Persistent storage
 
-**PARTIAL — append-file baseline merged in PR #3**
+**IN PROGRESS — PR #3 baseline merged; hardened candidate CI green**
 
-已完成：
+append-only file + index 候选已经进入实现：
 
-- canonical Event durable record；
-- std-only append-only file + in-memory index；
-- duplicate suppression across reopen；
-- interrupted final record recovery；
-- partial header repair；
-- completed-record corruption rejection；
-- dedicated storage smoke binary；
-- measured size delta ~8.7 KiB。
+- zero new dependency；
+- canonical Event wire records；
+- EventId duplicate suppression；
+- restart 顺序 scan + in-memory index rebuild；
+- u32 frame length 在分配前做上限检查；
+- domain-separated SHA-256 frame checksum；
+- checksum mismatch hard fail；
+- truncated tail 默认 hard fail；
+- 显式 recovery 只修复 incomplete final frame；
+- persistent storage smoke binary，并在 CI 中实际执行；
+- 独立 size delta report：最新同一 build 增量 **27,736 B / 27.1 KiB**。
 
 仍需比较：
 
 - SQLite adapter；
-- append throughput / batch durability；
+- append-only file + index。
+
+仍需记录：
+
+- binary delta — **DONE: +27,736 B / 27.1 KiB**（Linux x86_64 stripped release）；
+- append throughput；
+- process-kill / crash recovery；
 - file/db size；
 - recent-history query；
-- 10k / 100k / 1M event reopen/rebuild；
-- crash fault injection。
+- 10k / 100k event rebuild；
+- SQLite 同条件数据。
+
+在这些数据完成前，不把 append-file 标记为 Accepted。
 
 ---
 
@@ -128,6 +145,9 @@ persistent storage 的第一轮 std-only baseline 只增加约 8.7 KiB；真正�
 - Genesis canonical ordering；
 - duplicate plugin rejection；
 - canonical Genesis decode/re-encode check；
+- canonical Event decode/re-encode check；
+- Event schema/payload/body size bounds；
+- Event wire deterministic vector；
 - deterministic vector。
 
 ### TODO
@@ -320,6 +340,7 @@ RelayTransport
 
 ```
 seed-core smoke
+seed-storage smoke
 tree host
 relay
 plugin runtime host
@@ -345,6 +366,7 @@ fresh-install footprint
 - [ ] Device revocation
 - [ ] canonical decoder fuzzing
 - [ ] independent/cross-language vector
+- [x] append-file persistent Event Store candidate
 - [ ] persistent storage comparison
 - [ ] Transport adapters
 - [ ] Relay fallback
@@ -361,7 +383,7 @@ fresh-install footprint
 当前最合理的顺序：
 
 ```
-1. persistent storage scale benchmark + SQLite comparison
+1. persistent storage 10k / 100k / 1M reopen/rebuild benchmark + SQLite 同条件对照
 2. Transport abstraction + Loopback
 3. TCP Direct + Relay fallback
 4. Plugin Runtime comparison

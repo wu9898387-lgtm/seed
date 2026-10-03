@@ -125,7 +125,7 @@ mod tests {
 
     #[test]
     fn primitive_round_trip() {
-        let mut encoder = Encoder::with_capacity(32);
+        let mut encoder = Encoder::with_capacity(40);
         encoder.u8(7);
         encoder.u16(8);
         encoder.u32(9);

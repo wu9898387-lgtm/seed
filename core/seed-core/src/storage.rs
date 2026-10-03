@@ -1,20 +1,20 @@
 use std::{
     collections::HashSet,
-    convert::Infallible,
     fs::{File, OpenOptions},
-    io::{Seek, SeekFrom, Write},
+    io::{self, Read, Seek, SeekFrom, Write},
     path::Path,
 };
 
 use crate::{
-    event::{EncodeError as EventEncodeError, Event, EventDecodeError},
+    crypto::hash32,
+    event::{EncodeError, Event, EventDecodeError, MAX_EVENT_WIRE_BYTES},
     id::{EventId, SpaceId},
 };
 
-const LOG_MAGIC: &[u8; 4] = b"SELG";
-const LOG_VERSION: u16 = 1;
-const LOG_HEADER_BYTES: usize = 6;
-const MAX_EVENT_RECORD_BYTES: usize = 17 * 1024 * 1024;
+const STORE_MAGIC: &[u8; 8] = b"SEEDLOG1";
+const FRAME_CHECKSUM_DOMAIN: &[u8] = b"seed:event-store-frame:v1\0";
+const FRAME_CHECKSUM_BYTES: usize = 32;
+const FRAME_PREFIX_BYTES: usize = 4 + FRAME_CHECKSUM_BYTES;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AppendOutcome {
@@ -22,18 +22,61 @@ pub enum AppendOutcome {
     Duplicate,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RecoveryOutcome {
+    Clean,
+    TruncatedTail { offset: u64, removed_bytes: u64 },
+}
+
+#[derive(Debug)]
+pub enum StorageError {
+    Io(io::Error),
+    EventEncode(EncodeError),
+    EventDecode {
+        offset: u64,
+        error: EventDecodeError,
+    },
+    InvalidHeader,
+    FrameTooLarge {
+        offset: u64,
+        length: u32,
+    },
+    CorruptFrame {
+        offset: u64,
+    },
+    TruncatedTail {
+        offset: u64,
+        file_len: u64,
+    },
+    DuplicateEventInLog {
+        offset: u64,
+        id: EventId,
+    },
+}
+
+impl From<io::Error> for StorageError {
+    fn from(error: io::Error) -> Self {
+        Self::Io(error)
+    }
+}
+
+/// Accepted-event storage.
+///
+/// Callers are responsible for completing identity/signature/governance/state
+/// validation before appending. The store provides durability, deduplication,
+/// corruption detection, and space-scoped history access; it is not an
+/// authorization bypass.
 pub trait EventStore {
-    type Error;
-
-    fn append(&mut self, event: Event) -> Result<AppendOutcome, Self::Error>;
-    fn has_event(&self, id: &EventId) -> bool;
+    fn append(&mut self, event: Event) -> Result<AppendOutcome, StorageError>;
     fn len(&self) -> usize;
-
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
-
+    fn has_event(&self, id: &EventId) -> bool;
     fn events_for_space(&self, space: &SpaceId) -> Vec<&Event>;
+    fn checkpoint(&mut self) -> Result<(), StorageError> {
+        Ok(())
+    }
 }
 
 #[derive(Debug, Default)]
@@ -43,9 +86,7 @@ pub struct InMemoryEventStore {
 }
 
 impl EventStore for InMemoryEventStore {
-    type Error = Infallible;
-
-    fn append(&mut self, event: Event) -> Result<AppendOutcome, Self::Error> {
+    fn append(&mut self, event: Event) -> Result<AppendOutcome, StorageError> {
         if !self.seen.insert(event.id()) {
             return Ok(AppendOutcome::Duplicate);
         }
@@ -53,12 +94,12 @@ impl EventStore for InMemoryEventStore {
         Ok(AppendOutcome::Inserted)
     }
 
-    fn has_event(&self, id: &EventId) -> bool {
-        self.seen.contains(id)
-    }
-
     fn len(&self) -> usize {
         self.events.len()
+    }
+
+    fn has_event(&self, id: &EventId) -> bool {
+        self.seen.contains(id)
     }
 
     fn events_for_space(&self, space: &SpaceId) -> Vec<&Event> {
@@ -69,42 +110,22 @@ impl EventStore for InMemoryEventStore {
     }
 }
 
-#[derive(Debug)]
-pub enum FileStoreError {
-    Io(std::io::Error),
-    InvalidHeader,
-    UnsupportedVersion,
-    RecordTooLarge,
-    CorruptEvent {
-        offset: u64,
-        reason: EventDecodeError,
-    },
-    EventIdMismatch {
-        offset: u64,
-    },
-    DuplicateRecord {
-        offset: u64,
-    },
-    EventEncode(EventEncodeError),
-}
-
-impl From<std::io::Error> for FileStoreError {
-    fn from(error: std::io::Error) -> Self {
-        Self::Io(error)
-    }
-}
-
-/// Append-only Event Store spike.
+/// Minimal append-only persistent Event Store used by the Phase-0 storage spike.
 ///
-/// This type only accepts Event objects that the caller has already decided are
-/// valid. It does not replace the Identity/Capability/Governance acceptance
-/// pipeline. On open, it validates structural event framing and the persisted
-/// EventId, then rebuilds the in-memory index.
+/// File layout:
 ///
-/// A partial final record is treated as an interrupted append and is truncated
-/// back to the last complete record. A partial initial header that matches the
-/// expected header prefix is repaired. Structural corruption in a complete
-/// record is rejected rather than silently skipped.
+/// ```text
+/// "SEEDLOG1"
+/// repeat {
+///   event_len: u32 big-endian
+///   checksum:  32-byte SHA-256 domain-separated digest of event_bytes
+///   event_bytes: canonical Event wire record
+/// }
+/// ```
+///
+/// The checksum detects accidental/local file corruption; Event authenticity is
+/// still provided by the Device signature and must be validated by the normal
+/// acceptance/rebuild pipeline.
 #[derive(Debug)]
 pub struct FileEventStore {
     file: File,
@@ -113,139 +134,163 @@ pub struct FileEventStore {
 }
 
 impl FileEventStore {
-    pub fn open(path: impl AsRef<Path>) -> Result<Self, FileStoreError> {
-        let path = path.as_ref();
-        let mut file = OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .read(true)
-            .write(true)
-            .open(path)?;
-
-        let bytes = std::fs::read(path)?;
-        let mut seen = HashSet::new();
-        let mut events = Vec::new();
-
-        if bytes.is_empty() {
-            write_log_header(&mut file)?;
-        } else if bytes.len() < LOG_HEADER_BYTES {
-            let expected = expected_log_header();
-            if bytes != expected[..bytes.len()] {
-                return Err(FileStoreError::InvalidHeader);
-            }
-
-            file.set_len(0)?;
-            write_log_header(&mut file)?;
-        } else {
-            if &bytes[..4] != LOG_MAGIC {
-                return Err(FileStoreError::InvalidHeader);
-            }
-
-            let version = u16::from_be_bytes([bytes[4], bytes[5]]);
-            if version != LOG_VERSION {
-                return Err(FileStoreError::UnsupportedVersion);
-            }
-
-            let mut offset = LOG_HEADER_BYTES;
-            while offset < bytes.len() {
-                let record_start = offset;
-
-                if bytes.len() - offset < 4 {
-                    recover_partial_tail(&mut file, record_start)?;
-                    break;
-                }
-
-                let event_len = u32::from_be_bytes(
-                    bytes[offset..offset + 4]
-                        .try_into()
-                        .expect("checked record length prefix"),
-                ) as usize;
-                offset += 4;
-
-                if event_len > MAX_EVENT_RECORD_BYTES {
-                    return Err(FileStoreError::RecordTooLarge);
-                }
-
-                let needed = 32usize
-                    .checked_add(event_len)
-                    .ok_or(FileStoreError::RecordTooLarge)?;
-
-                if bytes.len() - offset < needed {
-                    recover_partial_tail(&mut file, record_start)?;
-                    break;
-                }
-
-                let expected_id =
-                    EventId::from_bytes(bytes[offset..offset + 32].try_into().expect("checked id"));
-                offset += 32;
-
-                let event_end = offset + event_len;
-                let event =
-                    Event::from_canonical_bytes(&bytes[offset..event_end]).map_err(|reason| {
-                        FileStoreError::CorruptEvent {
-                            offset: record_start as u64,
-                            reason,
-                        }
-                    })?;
-                offset = event_end;
-
-                if event.id() != expected_id {
-                    return Err(FileStoreError::EventIdMismatch {
-                        offset: record_start as u64,
-                    });
-                }
-
-                if !seen.insert(event.id()) {
-                    return Err(FileStoreError::DuplicateRecord {
-                        offset: record_start as u64,
-                    });
-                }
-                events.push(event);
-            }
-        }
-
-        file.seek(SeekFrom::End(0))?;
-
-        Ok(Self { file, seen, events })
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, StorageError> {
+        Self::open_inner(path, false).map(|(store, _)| store)
     }
 
-    pub fn sync(&mut self) -> Result<(), FileStoreError> {
-        self.file.flush()?;
+    /// Open the log and repair only an incomplete final frame.
+    ///
+    /// A checksum mismatch, invalid Event encoding, duplicate persisted Event,
+    /// invalid header, or oversized frame remains a hard error and is never
+    /// silently truncated.
+    pub fn open_recover_tail(
+        path: impl AsRef<Path>,
+    ) -> Result<(Self, RecoveryOutcome), StorageError> {
+        Self::open_inner(path, true)
+    }
+
+    fn open_inner(
+        path: impl AsRef<Path>,
+        recover_tail: bool,
+    ) -> Result<(Self, RecoveryOutcome), StorageError> {
+        let mut file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(path)?;
+
+        if file.metadata()?.len() == 0 {
+            file.write_all(STORE_MAGIC)?;
+            file.sync_data()?;
+        }
+
+        file.seek(SeekFrom::Start(0))?;
+        let mut header = [0u8; STORE_MAGIC.len()];
+        match file.read_exact(&mut header) {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => {
+                return Err(StorageError::InvalidHeader);
+            }
+            Err(error) => return Err(StorageError::Io(error)),
+        }
+        if &header != STORE_MAGIC {
+            return Err(StorageError::InvalidHeader);
+        }
+
+        let mut store = Self {
+            file,
+            seen: HashSet::new(),
+            events: Vec::new(),
+        };
+        let recovery = store.rebuild_index(recover_tail)?;
+        store.file.seek(SeekFrom::End(0))?;
+        Ok((store, recovery))
+    }
+
+    fn rebuild_index(&mut self, recover_tail: bool) -> Result<RecoveryOutcome, StorageError> {
+        let file_len = self.file.metadata()?.len();
+        let mut offset = STORE_MAGIC.len() as u64;
+
+        while offset < file_len {
+            let remaining = file_len - offset;
+            if remaining < 4 {
+                return self.handle_truncated_tail(recover_tail, offset, file_len);
+            }
+
+            self.file.seek(SeekFrom::Start(offset))?;
+            let mut len_bytes = [0u8; 4];
+            self.file.read_exact(&mut len_bytes)?;
+            let frame_len = u32::from_be_bytes(len_bytes);
+
+            if frame_len as usize > MAX_EVENT_WIRE_BYTES {
+                return Err(StorageError::FrameTooLarge {
+                    offset,
+                    length: frame_len,
+                });
+            }
+
+            let total_frame_len = FRAME_PREFIX_BYTES as u64 + frame_len as u64;
+            if remaining < total_frame_len {
+                return self.handle_truncated_tail(recover_tail, offset, file_len);
+            }
+
+            let mut stored_checksum = [0u8; FRAME_CHECKSUM_BYTES];
+            self.file.read_exact(&mut stored_checksum)?;
+
+            let mut event_bytes = vec![0u8; frame_len as usize];
+            self.file.read_exact(&mut event_bytes)?;
+
+            let expected_checksum = hash32(FRAME_CHECKSUM_DOMAIN, &[&event_bytes]);
+            if stored_checksum != expected_checksum {
+                return Err(StorageError::CorruptFrame { offset });
+            }
+
+            let event = Event::from_canonical_bytes(&event_bytes)
+                .map_err(|error| StorageError::EventDecode { offset, error })?;
+
+            if !self.seen.insert(event.id()) {
+                return Err(StorageError::DuplicateEventInLog {
+                    offset,
+                    id: event.id(),
+                });
+            }
+            self.events.push(event);
+            offset += total_frame_len;
+        }
+
+        Ok(RecoveryOutcome::Clean)
+    }
+
+    fn handle_truncated_tail(
+        &mut self,
+        recover_tail: bool,
+        offset: u64,
+        file_len: u64,
+    ) -> Result<RecoveryOutcome, StorageError> {
+        if !recover_tail {
+            return Err(StorageError::TruncatedTail { offset, file_len });
+        }
+
+        self.file.set_len(offset)?;
         self.file.sync_data()?;
-        Ok(())
+        self.file.seek(SeekFrom::Start(offset))?;
+
+        Ok(RecoveryOutcome::TruncatedTail {
+            offset,
+            removed_bytes: file_len - offset,
+        })
     }
 }
 
 impl EventStore for FileEventStore {
-    type Error = FileStoreError;
-
-    fn append(&mut self, event: Event) -> Result<AppendOutcome, Self::Error> {
+    fn append(&mut self, event: Event) -> Result<AppendOutcome, StorageError> {
         if self.seen.contains(&event.id()) {
             return Ok(AppendOutcome::Duplicate);
         }
 
-        let encoded = event
-            .canonical_bytes()
-            .map_err(FileStoreError::EventEncode)?;
-        if encoded.len() > MAX_EVENT_RECORD_BYTES {
-            return Err(FileStoreError::RecordTooLarge);
+        let event_bytes = event.canonical_bytes().map_err(StorageError::EventEncode)?;
+        if event_bytes.len() > MAX_EVENT_WIRE_BYTES {
+            return Err(StorageError::EventEncode(EncodeError::BodyTooLarge));
         }
-        let encoded_len =
-            u32::try_from(encoded.len()).map_err(|_| FileStoreError::RecordTooLarge)?;
 
+        let frame_len = u32::try_from(event_bytes.len())
+            .map_err(|_| StorageError::EventEncode(EncodeError::FieldTooLarge))?;
+        let checksum = hash32(FRAME_CHECKSUM_DOMAIN, &[&event_bytes]);
         let start = self.file.seek(SeekFrom::End(0))?;
-        let write_result = (|| -> Result<(), std::io::Error> {
-            self.file.write_all(&encoded_len.to_be_bytes())?;
-            self.file.write_all(event.id().as_bytes())?;
-            self.file.write_all(&encoded)?;
-            self.file.flush()?;
-            self.file.sync_data()
+
+        let write_result = (|| -> io::Result<()> {
+            self.file.write_all(&frame_len.to_be_bytes())?;
+            self.file.write_all(&checksum)?;
+            self.file.write_all(&event_bytes)?;
+            self.file.sync_data()?;
+            Ok(())
         })();
 
         if let Err(error) = write_result {
             let _ = self.file.set_len(start);
             let _ = self.file.seek(SeekFrom::End(0));
-            return Err(FileStoreError::Io(error));
+            return Err(StorageError::Io(error));
         }
 
         self.seen.insert(event.id());
@@ -253,12 +298,12 @@ impl EventStore for FileEventStore {
         Ok(AppendOutcome::Inserted)
     }
 
-    fn has_event(&self, id: &EventId) -> bool {
-        self.seen.contains(id)
-    }
-
     fn len(&self) -> usize {
         self.events.len()
+    }
+
+    fn has_event(&self, id: &EventId) -> bool {
+        self.seen.contains(id)
     }
 
     fn events_for_space(&self, space: &SpaceId) -> Vec<&Event> {
@@ -267,42 +312,19 @@ impl EventStore for FileEventStore {
             .filter(|event| &event.header().space == space)
             .collect()
     }
-}
 
-fn expected_log_header() -> [u8; LOG_HEADER_BYTES] {
-    let version = LOG_VERSION.to_be_bytes();
-    [
-        LOG_MAGIC[0],
-        LOG_MAGIC[1],
-        LOG_MAGIC[2],
-        LOG_MAGIC[3],
-        version[0],
-        version[1],
-    ]
-}
-
-fn write_log_header(file: &mut File) -> Result<(), FileStoreError> {
-    file.seek(SeekFrom::Start(0))?;
-    file.write_all(&expected_log_header())?;
-    file.flush()?;
-    file.sync_data()?;
-    Ok(())
-}
-
-fn recover_partial_tail(file: &mut File, valid_len: usize) -> Result<(), FileStoreError> {
-    file.set_len(valid_len as u64)?;
-    file.seek(SeekFrom::End(0))?;
-    file.sync_data()?;
-    Ok(())
+    fn checkpoint(&mut self) -> Result<(), StorageError> {
+        self.file.sync_data()?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::{
-        fs::OpenOptions,
-        io::Write,
-        path::{Path, PathBuf},
-        process,
+        fs,
+        io::{Read, Seek, Write},
+        path::PathBuf,
     };
 
     use crate::{
@@ -338,23 +360,20 @@ mod tests {
         .unwrap()
     }
 
-    fn temp_path(label: &str) -> PathBuf {
-        std::env::temp_dir().join(format!("seed-{label}-{}.eventlog", process::id()))
-    }
-
-    fn cleanup(path: &Path) {
-        let _ = std::fs::remove_file(path);
+    fn test_path(name: &str) -> PathBuf {
+        let mut path = std::env::temp_dir();
+        path.push(format!("seed-core-{name}-{}.eventlog", std::process::id()));
+        let _ = fs::remove_file(&path);
+        path
     }
 
     #[test]
     fn duplicate_event_is_idempotent() {
         let event = event(1, 9);
-        let event_id = event.id();
         let duplicate = event.clone();
         let mut store = InMemoryEventStore::default();
 
         assert_eq!(store.append(event).unwrap(), AppendOutcome::Inserted);
-        assert!(store.has_event(&event_id));
         assert_eq!(store.append(duplicate).unwrap(), AppendOutcome::Duplicate);
         assert_eq!(store.len(), 1);
     }
@@ -372,97 +391,139 @@ mod tests {
     }
 
     #[test]
-    fn file_store_round_trip_and_duplicate_suppression() {
-        let path = temp_path("round-trip");
-        cleanup(&path);
-
+    fn persistent_store_survives_reopen_and_rebuilds_index() {
+        let path = test_path("reopen");
         let first = event(1, 9);
+        let second = event(2, 8);
         let first_id = first.id();
-        let duplicate = first.clone();
 
         {
             let mut store = FileEventStore::open(&path).unwrap();
             assert_eq!(store.append(first).unwrap(), AppendOutcome::Inserted);
-            assert!(store.has_event(&first_id));
-            assert_eq!(store.len(), 1);
+            assert_eq!(store.append(second).unwrap(), AppendOutcome::Inserted);
+            assert_eq!(store.len(), 2);
+            store.checkpoint().unwrap();
         }
 
         {
-            let mut reopened = FileEventStore::open(&path).unwrap();
-            assert_eq!(reopened.len(), 1);
-            assert!(reopened.has_event(&first_id));
+            let store = FileEventStore::open(&path).unwrap();
+            assert_eq!(store.len(), 2);
+            assert!(store.has_event(&first_id));
             assert_eq!(
-                reopened.append(duplicate).unwrap(),
-                AppendOutcome::Duplicate
+                store.events_for_space(&SpaceId::from_bytes([9; 32])).len(),
+                1
             );
         }
 
-        cleanup(&path);
+        fs::remove_file(path).unwrap();
     }
 
     #[test]
-    fn partial_header_is_repaired_on_reopen() {
-        let path = temp_path("partial-header");
-        cleanup(&path);
+    fn persistent_duplicate_is_not_rewritten() {
+        let path = test_path("duplicate");
+        let event = event(1, 9);
+        let duplicate = event.clone();
+        let mut store = FileEventStore::open(&path).unwrap();
 
-        std::fs::write(&path, &expected_log_header()[..3]).unwrap();
+        assert_eq!(store.append(event).unwrap(), AppendOutcome::Inserted);
+        let after_insert = fs::metadata(&path).unwrap().len();
+        assert_eq!(store.append(duplicate).unwrap(), AppendOutcome::Duplicate);
+        let after_duplicate = fs::metadata(&path).unwrap().len();
 
-        let reopened = FileEventStore::open(&path).unwrap();
-        assert!(reopened.is_empty());
-        assert_eq!(
-            std::fs::read(&path).unwrap().as_slice(),
-            expected_log_header().as_slice()
-        );
-
-        cleanup(&path);
+        assert_eq!(after_insert, after_duplicate);
+        drop(store);
+        fs::remove_file(path).unwrap();
     }
 
     #[test]
-    fn partial_tail_is_truncated_on_reopen() {
-        let path = temp_path("partial-tail");
-        cleanup(&path);
+    fn truncated_tail_is_rejected_or_explicitly_recovered() {
+        let path = test_path("truncated-tail");
 
         {
             let mut store = FileEventStore::open(&path).unwrap();
             store.append(event(1, 9)).unwrap();
         }
-        let good_len = std::fs::metadata(&path).unwrap().len();
 
         {
             let mut file = OpenOptions::new().append(true).open(&path).unwrap();
-            file.write_all(&100u32.to_be_bytes()).unwrap();
-            file.write_all(&[7u8; 5]).unwrap();
+            file.write_all(&[0x00, 0x01]).unwrap();
             file.sync_data().unwrap();
         }
-        assert!(std::fs::metadata(&path).unwrap().len() > good_len);
 
-        let reopened = FileEventStore::open(&path).unwrap();
-        assert_eq!(reopened.len(), 1);
-        assert_eq!(std::fs::metadata(&path).unwrap().len(), good_len);
+        assert!(matches!(
+            FileEventStore::open(&path),
+            Err(StorageError::TruncatedTail { .. })
+        ));
 
-        cleanup(&path);
+        let (store, recovery) = FileEventStore::open_recover_tail(&path).unwrap();
+        assert_eq!(store.len(), 1);
+        assert!(matches!(
+            recovery,
+            RecoveryOutcome::TruncatedTail {
+                removed_bytes: 2,
+                ..
+            }
+        ));
+
+        drop(store);
+        fs::remove_file(path).unwrap();
     }
 
     #[test]
-    fn corrupted_persisted_event_id_is_rejected() {
-        let path = temp_path("corrupt-id");
-        cleanup(&path);
+    fn checksum_corruption_is_never_silently_recovered() {
+        let path = test_path("corrupt-checksum");
 
         {
             let mut store = FileEventStore::open(&path).unwrap();
             store.append(event(1, 9)).unwrap();
         }
 
-        let mut bytes = std::fs::read(&path).unwrap();
-        let event_id_offset = LOG_HEADER_BYTES + 4;
-        bytes[event_id_offset] ^= 0xff;
-        std::fs::write(&path, bytes).unwrap();
+        {
+            let mut file = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&path)
+                .unwrap();
+            let checksum_offset = STORE_MAGIC.len() as u64 + 4;
+            file.seek(SeekFrom::Start(checksum_offset)).unwrap();
+            let mut byte = [0u8; 1];
+            file.read_exact(&mut byte).unwrap();
+            byte[0] ^= 0xff;
+            file.seek(SeekFrom::Start(checksum_offset)).unwrap();
+            file.write_all(&byte).unwrap();
+            file.sync_data().unwrap();
+        }
+
+        assert!(matches!(
+            FileEventStore::open_recover_tail(&path),
+            Err(StorageError::CorruptFrame { .. })
+        ));
+
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn oversized_frame_length_is_rejected_before_allocation() {
+        let path = test_path("oversized-frame");
+
+        {
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&path)
+                .unwrap();
+            file.write_all(STORE_MAGIC).unwrap();
+            let oversized = (MAX_EVENT_WIRE_BYTES as u32) + 1;
+            file.write_all(&oversized.to_be_bytes()).unwrap();
+            file.sync_data().unwrap();
+        }
 
         assert!(matches!(
             FileEventStore::open(&path),
-            Err(FileStoreError::EventIdMismatch { .. })
+            Err(StorageError::FrameTooLarge { .. })
         ));
 
-        cleanup(&path);
+        fs::remove_file(path).unwrap();
     }
 }
