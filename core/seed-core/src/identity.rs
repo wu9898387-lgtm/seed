@@ -15,10 +15,7 @@ pub struct IdentityDocument {
 
 impl IdentityDocument {
     pub fn from_root_public_key(root_public_key: PublicKey) -> Self {
-        let id = IdentityId::from_bytes(hash32(
-            IDENTITY_ID_DOMAIN,
-            &[root_public_key.as_bytes()],
-        ));
+        let id = IdentityId::from_bytes(hash32(IDENTITY_ID_DOMAIN, &[root_public_key.as_bytes()]));
         Self {
             id,
             root_public_key,
@@ -205,8 +202,7 @@ mod tests {
     #[test]
     fn identity_id_is_derived_from_root_public_key() {
         let root = RootIdentity::generate().unwrap();
-        let rebuilt =
-            IdentityDocument::from_root_public_key(root.document().root_public_key());
+        let rebuilt = IdentityDocument::from_root_public_key(root.document().root_public_key());
 
         assert_eq!(root.document().id(), rebuilt.id());
     }
