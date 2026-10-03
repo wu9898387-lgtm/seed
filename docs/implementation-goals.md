@@ -123,7 +123,7 @@ seed/
 - ADR-0006：Direct-first Transport；
 - ADR-0007：Genesis root / Validated Event。
 
-其中 ADR-0001 ~ 0003 已经随 PR #1 合并到 `main` 并有真实实现与测量，其余仍需后续 Spike。
+其中 ADR-0001 ~ 0003 已经随 PR #1 合并到 `main`；ADR-0005 的 std-only append-file baseline 已随 PR #3 合并。本轮 persistent-storage follow-up 进一步加入 bounded canonical Event wire、frame checksum、显式 tail recovery 和独立 storage smoke/size delta；最终 backend 仍未 Accepted，其余 ADR 继续按 Spike 收敛。
 
 ### Exit Criteria
 
@@ -748,26 +748,25 @@ MVP 发布候选必须满足：
 
 ## 21. 当前实现进度与下一步
 
-截至当前 `main`：
+截至本轮 persistent-storage follow-up 验证：
 
 - Rust baseline 已完成；
 - Identity / DeviceAuthorization 已完成第一版；
-- signed Event、deterministic IDs 与 canonical Event wire decode/re-encode 已完成；
-- append-only persistent Event Store candidate 已实现（restart rebuild / checksum / explicit tail recovery）；
+- signed Event 与 deterministic IDs 已完成；
 - Genesis canonical state machine 已完成；
 - plugin package digest pinning 已完成；
 - Capability DefaultDeny 已存在；
 - deterministic protocol vector 已存在；
-- release size CI 已存在；
-- 当前 `seed-core-smoke` 实测 390,328 B / 381.2 KiB；
-- append-file `seed-storage-smoke` 实测 418,064 B / 408.3 KiB；
-- 当前 persistent storage linked delta 为 27,736 B / 27.1 KiB；
-- PR #1 已 squash 合并，Core Kernel 已进入主分支；
-- append-file storage candidate 位于 PR #5，CI full gate 已通过。
+- PR #3 的 std-only FileEventStore baseline 已进入 `main`；
+- 本轮候选进一步加入 bounded canonical Event wire decode/re-encode、schema/payload/body 上限、domain-separated frame checksum、oversized frame pre-allocation rejection、strict truncated-tail handling 与显式 final-tail recovery；
+- CI 现在会真正执行 `seed-storage-smoke`，覆盖落盘、重开和索引恢复；
+- 最新 Linux x86_64 release CI：`seed-core-smoke` = **390,328 B / 381.2 KiB**，`seed-storage-smoke` = **418,064 B / 408.3 KiB**，同一 build 的 persistent-storage path 增量 = **27,736 B / 27.1 KiB**；
+- 当前验证为 31 个 unit tests + 1 个 protocol-vector integration test 全通过，fmt/check/Clippy/storage smoke/size gate 也全部通过；
+- append-file 仍只是 ADR-0005 的候选，不因为体积小就直接 Accepted。
 
 下一批优先实现：
 
-1. 完成 persistent storage 对照（append-file measurements + SQLite adapter）；
+1. persistent storage 10k / 100k / 1M reopen/rebuild benchmark + SQLite 同条件对照；
 2. Transport abstraction + Loopback；
 3. TCP Direct + Relay fallback；
 4. Plugin Runtime / Wasm engine size + sandbox comparison；
@@ -776,4 +775,4 @@ MVP 发布候选必须满足：
 7. Multi-node smoke framework；
 8. Tree Host。
 
-项目现在已经从“产品理念”进入“可执行工程 Spike”，但尚未进入面向用户的 MVP 功能堆叠阶段。
+项目现在已经从“产品理念”进入“可执行工程 Spike”，并开始用可重复 CI 数据收敛协议和依赖选择；尚未进入面向用户的 MVP 功能堆叠阶段。
