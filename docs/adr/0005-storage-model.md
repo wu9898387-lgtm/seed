@@ -89,6 +89,32 @@ record；文件 backend 不序列化 Rust struct 内存布局。
 
 这组规则的目标是避免“为了恢复而悄悄吞掉中间损坏”。
 
+## Phase-0 SQLite comparison adapter
+
+PR #8 增加了一个**可选** SQLite adapter，用来和 append-file 在同一 canonical
+Event wire 语义下比较，而不是引入第二套协议格式。
+
+当前实现：
+
+- `sqlite-storage` feature 使用系统 SQLite；
+- `sqlite-storage-bundled` 仅用于自包含构建/体积对照；
+- Event 仍保存 canonical Event wire bytes；
+- `event_id` 与 `space_id` 有独立索引列，并在 reopen 时与 Event wire 交叉校验；
+- duplicate EventId 保持 idempotent；
+- WAL + `synchronous=FULL`；
+- 提供按 Space 的 recent-history index/query；
+- 为兼容当前 `EventStore` trait，open 时仍加载完整 Event cache，因此这还不是最终 database API。
+
+同一 Linux x86_64 stripped release CI：
+
+- core：390,328 B / 381.2 KiB；
+- append-file：418,064 B / 408.3 KiB，较 core +27,736 B / 27.1 KiB；
+- SQLite system-linked：430,656 B / 420.6 KiB，较 core +40,328 B / 39.4 KiB；
+- SQLite bundled：1,488,048 B / 1,453.2 KiB，较 core +1,097,720 B / 1,072.0 KiB。
+
+因此 bundled SQLite 不适合作为 Seed 极小默认 Core 的基线；system-linked SQLite
+仍然是有竞争力的可选 backend，需要继续用 scale/query/crash/platform 数据比较。
+
 ## MVP backend
 
 持久化 backend 尚未 Accepted。
@@ -184,7 +210,8 @@ append-file 候选已经覆盖/正在覆盖：
 - append throughput；
 - recent-history query；
 - file size；
-- SQLite 同条件对照；
+- SQLite 初始 adapter / reopen / duplicate / indexed recent-history / size 对照 — **DONE**；
+- append-file 与 SQLite 的 10k / 100k scale、query、crash/power-loss 同条件对照；
 - desktop / Tree Host platform checks。
 
 ## Revisit conditions
