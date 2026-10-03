@@ -258,28 +258,38 @@ on_load -> success
 
 ## 7. Spike E — Transport
 
-**IN PROGRESS — Loopback abstraction merged; TCP / Relay pending**
+**IN PROGRESS — Loopback + TCP Direct + forced Relay fallback 已验证**
 
-先建立统一 abstraction，再实现：
+当前 reference path：
 
 ```
 LoopbackTransport
-TcpTransport
-RelayTransport
+TcpTransport(path=Direct)
+TcpTransport(path=Relay)
+connect_direct_or_relay(...)
 ```
 
-测试：
+已验证：
 
-- direct；
-- direct failure；
+- real localhost TCP direct；
+- direct connect failure；
 - relay fallback；
-- reconnect；
-- duplicate frame；
-- truncated frame；
-- malicious length；
-- oversized message。
+- canonical Event wire 经 TCP relay bridge 后语义不变；
+- truncated frame rejection；
+- malicious oversized length 在 allocation 前拒绝；
+- oversized outgoing frame rejection；
+- 上层继续通过 `dyn Transport` 使用 adapter；
+- Linux stripped `seed-transport-smoke`：**476,488 B / 465.3 KiB**；
+- 相对 core transport stack delta：**86,160 B / 84.1 KiB**；
+- TCP + fallback 相对 Loopback-only smoke 增量约 **72,056 B / 70.4 KiB**。
 
-上层 Direct session 不允许依赖具体 adapter 类型。
+仍需：
+
+- authenticated session / KEX；
+- E2EE relay envelope；
+- reconnect；
+- duplicate/replay policy；
+- NAT / QUIC comparison。
 
 ---
 
@@ -387,8 +397,8 @@ fresh-install footprint
 - [ ] fixed-environment persistent storage scale comparison
 - [ ] mid-write / torn-write / real power-loss fault injection
 - [x] Loopback Transport abstraction
-- [ ] TCP / Relay Transport adapters
-- [ ] Relay fallback
+- [x] TCP Direct / Relay reference transport path
+- [x] forced Direct -> Relay fallback
 - [ ] Plugin Runtime comparison
 - [ ] Plugin sandbox escape tests
 - [ ] Governance Allow/Deny/Pending vertical slice
@@ -403,13 +413,12 @@ fresh-install footprint
 
 ```
 1. fixed-environment storage 10k / 100k / 1M repeated benchmark + mid-write / torn-write / power-loss fault injection
-2. TCP Direct + Relay fallback
-3. Identity-authenticated secure session / KEX / E2EE，验证 Relay 只见 ciphertext envelope
-4. Plugin Runtime comparison
-5. Governance vertical slice
-6. Device revocation / key lifecycle
-7. Multi-node smoke framework
-8. Tree Host
+2. Identity-authenticated secure session / KEX / E2EE + reconnect/replay policy，验证 Relay 只见 ciphertext envelope
+3. Plugin Runtime comparison
+4. Governance vertical slice
+5. Device revocation / key lifecycle
+6. Multi-node smoke framework
+7. Tree Host
 ```
 
 不要先做复杂 UI、语音视频或插件市场。
