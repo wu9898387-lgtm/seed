@@ -17,7 +17,8 @@ Current scope:
 - plugin package digest pinning inside Genesis;
 - append-only in-memory Event Store with duplicate suppression;
 - durable append-only FileEventStore with restart replay, record checksums, and
-  fail-closed corruption/truncation detection.
+  fail-closed corruption/truncation detection;
+- raw FrameTransport boundary and length-prefixed localhost TCP framing spike.
 
 Genesis rules in the current spike:
 
@@ -33,6 +34,14 @@ Genesis rules in the current spike:
 - post-activation governance changes must eventually be represented as events,
   rather than rewriting Genesis.
 
+Transport boundary:
+
+- TcpFrameTransport moves opaque byte frames only;
+- the transport layer has no Owner/Governance semantics;
+- raw TCP framing is explicitly **not** an authenticated or encrypted session;
+- production Direct/Relay traffic must place an authenticated encrypted session
+  above FrameTransport before carrying user content.
+
 Security choices in this spike:
 
 - Ed25519 is provided by ed25519-dalek, not a Seed-specific algorithm;
@@ -47,7 +56,8 @@ Not implemented yet:
 - device revocation and key rotation;
 - scalable/indexed production event database;
 - automatic repair/salvage of a truncated event-log tail;
-- networking and secure sessions;
+- authenticated secure-session handshake and transport encryption;
+- NAT traversal / Relay transport;
 - plugin sandbox/runtime;
 - governance execution;
 - Tree Host.
