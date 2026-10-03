@@ -69,7 +69,7 @@ Identity + signing + Event + Genesis + 第一版 append-file storage 仍远低�
 - persistent storage smoke；
 - release size（core + storage candidate delta）。
 
-最新完整检查为绿色：31 个 unit tests + 1 个 protocol-vector integration test 通过，且 `seed-storage-smoke` 已实际执行 append -> checkpoint -> reopen/index recovery。
+最新 core 与 SQLite-feature gates 均为绿色：fmt/check/Clippy/tests/protocol/storage/transport/size 通过；`seed-storage-smoke` 覆盖 append -> checkpoint -> reopen/index recovery，SQLite feature gate 还覆盖 forced process-kill recovery 与 256-event storage comparison correctness smoke。
 
 任何 Phase 0 代码都不应通过关闭 warning gate 来“修 CI”。
 
@@ -383,7 +383,9 @@ fresh-install footprint
 - [ ] canonical decoder fuzzing
 - [ ] independent/cross-language vector
 - [x] append-file persistent Event Store candidate
-- [ ] persistent storage scale/crash comparison
+- [x] completed-durable-append forced process-kill recovery（append-file + SQLite）
+- [ ] fixed-environment persistent storage scale comparison
+- [ ] mid-write / torn-write / real power-loss fault injection
 - [x] Loopback Transport abstraction
 - [ ] TCP / Relay Transport adapters
 - [ ] Relay fallback
@@ -400,9 +402,9 @@ fresh-install footprint
 当前最合理的顺序：
 
 ```
-1. persistent storage 10k / 100k / 1M reopen/rebuild benchmark + SQLite 同条件对照
-2. Transport abstraction + Loopback — **DONE**
-3. TCP Direct + Relay fallback
+1. fixed-environment storage 10k / 100k / 1M repeated benchmark + mid-write / torn-write / power-loss fault injection
+2. TCP Direct + Relay fallback
+3. Identity-authenticated secure session / KEX / E2EE，验证 Relay 只见 ciphertext envelope
 4. Plugin Runtime comparison
 5. Governance vertical slice
 6. Device revocation / key lifecycle
