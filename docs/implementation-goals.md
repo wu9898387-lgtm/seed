@@ -113,71 +113,17 @@ seed/
 
 在正式写大量业务代码前解决高风险技术问题。
 
-### 必须输出
+### 当前 ADR 序列
 
-#### ADR-0001：Core Language
+- ADR-0001：Core language / Rust spike；
+- ADR-0002：Root and Device signing keys；
+- ADR-0003：Narrow canonical binary encoding；
+- ADR-0004：Plugin Runtime / Wasm Host ABI；
+- ADR-0005：Validated Event Log / Storage；
+- ADR-0006：Direct-first Transport；
+- ADR-0007：Genesis root / Validated Event。
 
-候选至少比较：
-
-- Rust
-- C++
-- C
-
-评价：
-
-- 二进制体积；
-- 内存安全；
-- 跨平台；
-- async/network；
-- FFI；
-- 插件 Runtime 集成；
-- 依赖生态。
-
-当前倾向可以优先验证 Rust，但在 Size Spike 前不冻结。
-
-#### ADR-0002：Plugin Runtime
-
-候选：
-
-- WASM Runtime；
-- Native process/plugin；
-- 自定义轻量 VM；
-- 受限脚本 Runtime。
-
-验证：
-
-- 最小 hello-plugin 体积；
-- Sandbox 能力；
-- ABI 稳定性；
-- 调用开销；
-- Host size 增量。
-
-#### ADR-0003：Serialization
-
-至少评估：
-
-- CBOR
-- MessagePack
-- Protobuf
-- 自定义 canonical binary format
-
-Genesis 必须有 canonical encoding。
-
-#### ADR-0004：Storage
-
-至少验证一个：
-
-- SQLite；
-- embedded KV；
-- append-only log + index。
-
-#### ADR-0005：Transport
-
-定义统一接口，并完成：
-
-- localhost peer；
-- TCP/QUIC 之一的 spike；
-- Relay 模拟。
+其中 ADR-0001 ~ 0003 已经在 `core-kernel-spike` 中有实现和测量，其余仍需后续 Spike。
 
 ### Exit Criteria
 
@@ -793,16 +739,29 @@ MVP 发布候选必须满足：
 
 ---
 
-## 21. 当前最重要的下一步
+## 21. 当前实现进度与下一步
 
-在实际进入功能开发前，优先完成：
+截至当前 `core-kernel-spike`：
 
-1. ADR 目录与模板；
-2. Core Language size spike；
-3. Plugin Runtime size/sandbox spike；
-4. Genesis canonical encoding spike；
-5. Event + Signature test vector；
-6. Transport interface；
-7. 自动 size-report 工具。
+- Rust baseline 已完成；
+- Identity / DeviceAuthorization 已完成第一版；
+- signed Event 与 deterministic IDs 已完成；
+- Genesis canonical state machine 已完成；
+- plugin package digest pinning 已完成；
+- Capability DefaultDeny 已存在；
+- deterministic protocol vector 已存在；
+- release size CI 已存在；
+- Genesis 后 smoke binary 实测约 380.7 KiB。
 
-完成这些后，Seed 才真正从“产品理念”进入“可执行工程项目”阶段。
+下一批优先实现：
+
+1. 给 Genesis 加入显式随机 creation nonce，并 version-bump test vector；
+2. 让当前 Core Kernel PR 保持 merge-ready；
+3. persistent Event Store（SQLite vs append-file）；
+4. Transport abstraction + Loopback；
+5. TCP Direct + Relay fallback；
+6. Plugin Runtime / Wasm engine size + sandbox comparison；
+7. Governance Allow / Deny / Pending 纵向切片；
+8. Tree Host。
+
+项目现在已经从“产品理念”进入“可执行工程 Spike”，但尚未进入面向用户的 MVP 功能堆叠阶段。
