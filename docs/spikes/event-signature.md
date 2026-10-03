@@ -1,6 +1,6 @@
 # Phase 0 Spike — Event Signature
 
-> Status: running
+> Status: measured
 
 ## Purpose
 
@@ -34,19 +34,39 @@ must never be reused as a real identity key.
 
 ## Measurement
 
-CI builds both:
+GitHub Actions on Ubuntu 24.04 / Rust 1.99.0 measured:
 
-- seed-phase0-core — kernel baseline;
-- seed-phase0-crypto — the same workspace with the Ed25519 path exercised.
+- seed-phase0-core: **283,416 bytes (277 KiB)**;
+- seed-phase0-crypto: **354,936 bytes (347 KiB)**;
+- linked binary delta: **71,520 bytes**;
+- crypto spike utilization of the 2 MiB target: about **16.9%**.
 
-The binary delta is useful as a rough linked-size signal, not as an exact
-per-crate accounting method.
+The binary delta is a rough linked-size signal, not exact per-crate accounting.
+
+## Deterministic vector
+
+Test secret bytes:
+
+    11 repeated 32 times
+
+Message:
+
+    seed:phase0:event-signature:v1
+
+Public key:
+
+    d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737
+
+Signature:
+
+    0b0e491a61de67f3909383608bb4b1f7edc216e951b3a36427a7276e6d833e9b
+    92bedc7ea5b68fe82f25ba2c930692490091f1937ad46d84e8da803cae6cfb00
+
+The Core unit test freezes this public key and signature exactly and also
+verifies that a one-byte message change is rejected.
 
 ## Next evidence
 
-After CI passes:
-
-1. record the public key and signature vector;
-2. record release binary size and delta;
-3. freeze the vector as a regression test;
-4. only then connect signatures to canonical Event bytes.
+The next protocol step is canonical Event bytes. Only after that encoding is
+stable enough for a spike should this signature wrapper sign Event payloads
+rather than an isolated vector string.
