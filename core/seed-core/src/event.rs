@@ -103,6 +103,32 @@ impl Event {
         canonical_unsigned_bytes(&self.header, &self.payload)
     }
 
+    /// Reconstruct an Event from storage-owned fields and verify the content-derived ID.
+    ///
+    /// This intentionally does not re-run Identity/DeviceAuthorization verification because
+    /// storage does not own the identity registry. Callers that ingest untrusted data must still
+    /// execute the normal acceptance pipeline before appending the Event.
+    pub(crate) fn from_stored_parts(
+        id: EventId,
+        header: EventHeader,
+        payload: Vec<u8>,
+        signature: Signature,
+    ) -> Result<Self, EventVerifyError> {
+        let unsigned =
+            canonical_unsigned_bytes(&header, &payload).map_err(EventVerifyError::Encode)?;
+
+        if derive_event_id(&unsigned, &signature) != id {
+            return Err(EventVerifyError::IdMismatch);
+        }
+
+        Ok(Self {
+            id,
+            header,
+            payload,
+            signature,
+        })
+    }
+
     pub fn verify(
         &self,
         identity: &IdentityDocument,
