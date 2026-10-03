@@ -24,6 +24,11 @@ name = "seed-storage-compare"
 path = "src/bin/seed-storage-compare.rs"
 required-features = ["sqlite-storage"]
 
+[[bin]]
+name = "seed-storage-crash-worker"
+path = "src/bin/seed-storage-crash-worker.rs"
+required-features = ["sqlite-storage"]
+
 [dependencies]
 ed25519-dalek = { version = "=3.0.0", default-features = false, features = ["zeroize"] }
 getrandom = "=0.4.3"
