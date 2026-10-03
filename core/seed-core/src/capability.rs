@@ -27,7 +27,9 @@ pub enum CapabilityDecision {
     Allow,
     Deny,
     /// The decision depends on an external governance workflow such as a vote.
-    Pending { reason: String },
+    Pending {
+        reason: String,
+    },
 }
 
 pub trait CapabilityEvaluator {
