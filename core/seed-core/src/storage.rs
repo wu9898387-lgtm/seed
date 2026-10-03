@@ -2,7 +2,7 @@ use std::{
     collections::HashSet,
     convert::Infallible,
     fs::{File, OpenOptions},
-    io::{Seek, SeekFrom, Write},
+    io::{Read, Seek, SeekFrom, Write},
     path::Path,
 };
 
@@ -122,82 +122,91 @@ impl FileEventStore {
             .write(true)
             .open(path)?;
 
-        let bytes = std::fs::read(path)?;
+        let file_len = file.metadata()?.len();
         let mut seen = HashSet::new();
         let mut events = Vec::new();
 
-        if bytes.is_empty() {
+        if file_len == 0 {
             write_log_header(&mut file)?;
-        } else if bytes.len() < LOG_HEADER_BYTES {
+        } else if file_len < LOG_HEADER_BYTES as u64 {
             let expected = expected_log_header();
-            if bytes != expected[..bytes.len()] {
+            let mut actual = [0u8; LOG_HEADER_BYTES];
+            file.seek(SeekFrom::Start(0))?;
+            file.read_exact(&mut actual[..file_len as usize])?;
+
+            if actual[..file_len as usize] != expected[..file_len as usize] {
                 return Err(FileStoreError::InvalidHeader);
             }
 
             file.set_len(0)?;
             write_log_header(&mut file)?;
         } else {
-            if &bytes[..4] != LOG_MAGIC {
+            file.seek(SeekFrom::Start(0))?;
+            let mut header = [0u8; LOG_HEADER_BYTES];
+            file.read_exact(&mut header)?;
+
+            if &header[..4] != LOG_MAGIC {
                 return Err(FileStoreError::InvalidHeader);
             }
 
-            let version = u16::from_be_bytes([bytes[4], bytes[5]]);
+            let version = u16::from_be_bytes([header[4], header[5]]);
             if version != LOG_VERSION {
                 return Err(FileStoreError::UnsupportedVersion);
             }
 
-            let mut offset = LOG_HEADER_BYTES;
-            while offset < bytes.len() {
+            let mut offset = LOG_HEADER_BYTES as u64;
+            while offset < file_len {
                 let record_start = offset;
+                let remaining = file_len - offset;
 
-                if bytes.len() - offset < 4 {
+                if remaining < 4 {
                     recover_partial_tail(&mut file, record_start)?;
                     break;
                 }
 
-                let event_len = u32::from_be_bytes(
-                    bytes[offset..offset + 4]
-                        .try_into()
-                        .expect("checked record length prefix"),
-                ) as usize;
+                let mut len_bytes = [0u8; 4];
+                file.read_exact(&mut len_bytes)?;
+                let event_len = u32::from_be_bytes(len_bytes) as usize;
                 offset += 4;
 
                 if event_len > MAX_EVENT_RECORD_BYTES {
                     return Err(FileStoreError::RecordTooLarge);
                 }
 
-                let needed = 32usize
-                    .checked_add(event_len)
+                let needed = 32u64
+                    .checked_add(event_len as u64)
                     .ok_or(FileStoreError::RecordTooLarge)?;
 
-                if bytes.len() - offset < needed {
+                if file_len - offset < needed {
                     recover_partial_tail(&mut file, record_start)?;
                     break;
                 }
 
-                let expected_id =
-                    EventId::from_bytes(bytes[offset..offset + 32].try_into().expect("checked id"));
+                let mut expected_id_bytes = [0u8; 32];
+                file.read_exact(&mut expected_id_bytes)?;
+                let expected_id = EventId::from_bytes(expected_id_bytes);
                 offset += 32;
 
-                let event_end = offset + event_len;
-                let event =
-                    Event::from_canonical_bytes(&bytes[offset..event_end]).map_err(|reason| {
-                        FileStoreError::CorruptEvent {
-                            offset: record_start as u64,
-                            reason,
-                        }
-                    })?;
-                offset = event_end;
+                let mut event_bytes = vec![0u8; event_len];
+                file.read_exact(&mut event_bytes)?;
+                offset += event_len as u64;
+
+                let event = Event::from_canonical_bytes(&event_bytes).map_err(|reason| {
+                    FileStoreError::CorruptEvent {
+                        offset: record_start,
+                        reason,
+                    }
+                })?;
 
                 if event.id() != expected_id {
                     return Err(FileStoreError::EventIdMismatch {
-                        offset: record_start as u64,
+                        offset: record_start,
                     });
                 }
 
                 if !seen.insert(event.id()) {
                     return Err(FileStoreError::DuplicateRecord {
-                        offset: record_start as u64,
+                        offset: record_start,
                     });
                 }
                 events.push(event);
@@ -289,8 +298,8 @@ fn write_log_header(file: &mut File) -> Result<(), FileStoreError> {
     Ok(())
 }
 
-fn recover_partial_tail(file: &mut File, valid_len: usize) -> Result<(), FileStoreError> {
-    file.set_len(valid_len as u64)?;
+fn recover_partial_tail(file: &mut File, valid_len: u64) -> Result<(), FileStoreError> {
+    file.set_len(valid_len)?;
     file.seek(SeekFrom::End(0))?;
     file.sync_data()?;
     Ok(())
@@ -396,6 +405,31 @@ mod tests {
                 AppendOutcome::Duplicate
             );
         }
+
+        cleanup(&path);
+    }
+
+    #[test]
+    fn reopen_rebuilds_index_without_loading_whole_file() {
+        let path = temp_path("streaming-reopen");
+        cleanup(&path);
+
+        {
+            let mut store = FileEventStore::open(&path).unwrap();
+            for sequence in 0..128 {
+                store.append(event(sequence, (sequence % 4) as u8)).unwrap();
+            }
+            assert_eq!(store.len(), 128);
+        }
+
+        let reopened = FileEventStore::open(&path).unwrap();
+        assert_eq!(reopened.len(), 128);
+        assert_eq!(
+            reopened
+                .events_for_space(&SpaceId::from_bytes([2; 32]))
+                .len(),
+            32
+        );
 
         cleanup(&path);
     }
