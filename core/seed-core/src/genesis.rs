@@ -575,11 +575,9 @@ mod tests {
             .unwrap();
 
         let mut encoded = record.canonical_bytes().unwrap();
-        let config_byte = encoded
-            .iter()
-            .position(|byte| *byte == b'o')
-            .expect("config byte");
-        encoded[config_byte] = b'x';
+        let wire_prefix_bytes = GENESIS_WIRE_MAGIC.len() + 2 + 4;
+        let created_at_offset = wire_prefix_bytes + 2 + 2 + 1 + 32 + 32;
+        encoded[created_at_offset] ^= 0x01;
 
         let tampered = GenesisRecord::from_canonical_bytes(&encoded).unwrap();
         assert_eq!(
