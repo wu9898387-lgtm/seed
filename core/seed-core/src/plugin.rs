@@ -2,7 +2,7 @@ use crate::capability::CapabilityId;
 
 /// Opaque plugin identifier.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct PluginId([u8; Self::LEN]);
+pub struct PluginId([u8; 16]);
 
 impl PluginId {
     pub const LEN: usize = 16;
