@@ -2,7 +2,7 @@ name: core-ci
 
 on:
   push:
-    branches: [main, core-kernel-spike, phase0-persistent-event-store]
+    branches: [main, core-kernel-spike, transport-spike]
   pull_request:
 
 permissions:
@@ -28,5 +28,7 @@ jobs:
         run: cargo run --quiet --bin seed-vector
       - name: Persistent storage smoke
         run: cargo run --quiet --bin seed-storage-smoke
+      - name: Transport smoke
+        run: cargo run --quiet --bin seed-transport-smoke
       - name: Release size
         run: sh tools/size-report.sh
