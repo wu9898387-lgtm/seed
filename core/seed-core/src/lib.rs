@@ -9,6 +9,7 @@ pub mod event;
 pub mod identity;
 pub mod plugin;
 pub mod space;
+pub mod storage;
 pub mod transport;
 
 /// Protocol version for the Phase 0 spike.
